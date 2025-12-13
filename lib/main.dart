@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Вхід Firebase
-import 'package:google_sign_in/google_sign_in.dart'; // Вхід Google
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
+import 'product_model.dart'; // Переконайся, що цей файл існує в папці lib
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,14 +26,13 @@ class SmartFridgeApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         useMaterial3: true,
       ),
-      // Перевіряємо: якщо юзер вже зайшов - показуємо Холодильник, якщо ні - Екран входу
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
           if (snapshot.hasData) {
-            return const FridgeScreen(); // Головний екран
+            return const FridgeScreen();
           }
-          return const AuthScreen(); // Екран входу
+          return const AuthScreen();
         },
       ),
     );
@@ -42,26 +43,18 @@ class SmartFridgeApp extends StatelessWidget {
 class AuthScreen extends StatelessWidget {
   const AuthScreen({super.key});
 
-  // Функція входу через Google
   Future<void> signInWithGoogle() async {
     try {
-      // 1. Запускаємо вікно вибору акаунту Google
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) return; // Якщо користувач закрив вікно
+      if (googleUser == null) return;
 
-      // 2. Отримуємо ключі доступу
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-
-      // 3. Створюємо "квиток" для Firebase
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      // 4. Заходимо у Firebase
       await FirebaseAuth.instance.signInWithCredential(credential);
-      print("Успішний вхід: ${googleUser.displayName}");
-
     } catch (e) {
       print("Помилка входу: $e");
     }
@@ -70,7 +63,6 @@ class AuthScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Smart Fridge Login')),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -80,10 +72,9 @@ class AuthScreen extends StatelessWidget {
             const Text('Smart Fridge', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 40),
             ElevatedButton.icon(
-              onPressed: signInWithGoogle, // Викликаємо нашу функцію
+              onPressed: signInWithGoogle,
               icon: const Icon(Icons.login),
               label: const Text('Увійти через Google'),
-              style: ElevatedButton.styleFrom(minimumSize: const Size(250, 50)),
             ),
           ],
         ),
@@ -93,48 +84,159 @@ class AuthScreen extends StatelessWidget {
 }
 
 // --- ГОЛОВНИЙ ЕКРАН (ХОЛОДИЛЬНИК) ---
-class FridgeScreen extends StatelessWidget {
+class FridgeScreen extends StatefulWidget {
   const FridgeScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Отримуємо дані поточного користувача
-    final user = FirebaseAuth.instance.currentUser;
+  State<FridgeScreen> createState() => _FridgeScreenState();
+}
 
+class _FridgeScreenState extends State<FridgeScreen> {
+  final user = FirebaseAuth.instance.currentUser!;
+
+  // Оновлена функція з працюючим повзунком
+  void _addProduct() {
+    final nameController = TextEditingController();
+    int daysToExpire = 7; // Початкове значення
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        // StatefulBuilder дозволяє оновлювати стан всередині діалогу
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Додати продукт'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(labelText: 'Назва (напр. Молоко)'),
+                    autofocus: true,
+                  ),
+                  const SizedBox(height: 20),
+                  // Показуємо вибрану кількість днів
+                  Text(
+                    "Придатний днів: $daysToExpire",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Slider(
+                    value: daysToExpire.toDouble(),
+                    min: 1,
+                    max: 30,
+                    divisions: 29,
+                    label: "$daysToExpire",
+                    activeColor: Colors.green,
+                    onChanged: (val) {
+                      // Тут використовуємо setDialogState замість setState
+                      setDialogState(() {
+                        daysToExpire = val.toInt();
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Скасувати'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (nameController.text.isNotEmpty) {
+                      await FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(user.uid)
+                          .collection('products')
+                          .add({
+                        'name': nameController.text,
+                        'addedDate': Timestamp.now(),
+                        'expirationDate': Timestamp.fromDate(
+                          DateTime.now().add(Duration(days: daysToExpire)),
+                        ),
+                      });
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: const Text('Додати'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Мій Холодильник'),
-        backgroundColor: Colors.green.shade100,
-        actions: [
-          // Кнопка виходу
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => FirebaseAuth.instance.signOut(),
-          )
-        ],
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        title: Row(
           children: [
-            // Показуємо фото користувача
-            if (user?.photoURL != null)
-              CircleAvatar(
-                backgroundImage: NetworkImage(user!.photoURL!),
-                radius: 40,
-              ),
-            const SizedBox(height: 20),
-            Text(
-              'Привіт, ${user?.displayName}!',
-              style: const TextStyle(fontSize: 20),
-            ),
-            const SizedBox(height: 10),
-            const Text('Тут буде список твоїх продуктів', style: TextStyle(color: Colors.grey)),
+            if (user.photoURL != null)
+              CircleAvatar(backgroundImage: NetworkImage(user.photoURL!), radius: 16),
+            const SizedBox(width: 10),
+            const Text('Мій Холодильник'),
           ],
         ),
+        actions: [
+          IconButton(icon: const Icon(Icons.logout), onPressed: () => FirebaseAuth.instance.signOut()),
+        ],
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('products')
+            .orderBy('expirationDate')
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+
+          final docs = snapshot.data!.docs;
+          if (docs.isEmpty) {
+            return const Center(child: Text("Холодильник пустий! 🕸️\nДодай щось смачненьке."));
+          }
+
+          return ListView.builder(
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final product = Product.fromFirestore(docs[index]);
+
+              Color statusColor = Colors.green;
+              if (product.daysLeft < 3) statusColor = Colors.red;
+              else if (product.daysLeft < 7) statusColor = Colors.orange;
+
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: statusColor.withOpacity(0.2),
+                    child: Icon(Icons.fastfood, color: statusColor),
+                  ),
+                  title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text("Залишилось днів: ${product.daysLeft}"),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.grey),
+                    onPressed: () {
+                      FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(user.uid)
+                          .collection('products')
+                          .doc(product.id)
+                          .delete();
+                    },
+                  ),
+                ),
+              );
+            },
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {},
+        onPressed: _addProduct,
         child: const Icon(Icons.add),
       ),
     );
