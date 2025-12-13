@@ -1,0 +1,1 @@
+{"flutter":{"platforms":{"android":{"default":{"projectId":"smart-fridge-ua","appId":"1:751094617128:android:f657381e5261cb1710511d","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"smart-fridge-ua","configurations":{"android":"1:751094617128:android:f657381e5261cb1710511d","ios":"1:751094617128:ios:acfe645e9035255d10511d"}}}}}}
