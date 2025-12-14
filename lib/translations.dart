@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-// Глобальна змінна, яка сповіщає про зміну мови
 final ValueNotifier<String> languageNotifier = ValueNotifier('Українська');
 
 class AppText {
@@ -32,6 +31,12 @@ class AppText {
       'push_desc': 'Нагадувати про продукти',
       'logout': 'Вийти з акаунту',
       'days_valid': 'Придатний днів:',
+      // РЕЦЕПТИ
+      'cook_btn': 'Знайти рецепти',
+      'loading': 'Шукаємо смачненьке...',
+      'error': 'Помилка пошуку',
+      'recipe_title': 'Можливі страви',
+      'missed': 'Треба докупити:',
     },
     'English': {
       'app_title': 'Smart Fridge',
@@ -60,6 +65,12 @@ class AppText {
       'push_desc': 'Remind about products',
       'logout': 'Log Out',
       'days_valid': 'Valid for (days):',
+      // RECIPES
+      'cook_btn': 'Find Recipes',
+      'loading': 'Searching recipes...',
+      'error': 'Error searching',
+      'recipe_title': 'Possible Dishes',
+      'missed': 'Missing ingredients:',
     },
     'Español': {
       'app_title': 'Smart Fridge',
@@ -88,6 +99,12 @@ class AppText {
       'push_desc': 'Recordar productos',
       'logout': 'Cerrar sesión',
       'days_valid': 'Válido por (días):',
+      // RECETAS
+      'cook_btn': 'Buscar Recetas',
+      'loading': 'Buscando recetas...',
+      'error': 'Error de búsqueda',
+      'recipe_title': 'Platos posibles',
+      'missed': 'Faltan ingredientes:',
     },
     'Français': {
       'app_title': 'Smart Fridge',
@@ -116,6 +133,12 @@ class AppText {
       'push_desc': 'Rappel des produits',
       'logout': 'Se déconnecter',
       'days_valid': 'Valable pour (jours) :',
+      // RECETTES
+      'cook_btn': 'Trouver des recettes',
+      'loading': 'Recherche de recettes...',
+      'error': 'Erreur de recherche',
+      'recipe_title': 'Plats possibles',
+      'missed': 'Ingrédients manquants :',
     },
   };
 

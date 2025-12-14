@@ -5,12 +5,14 @@ class Product {
   final String name;
   final DateTime expirationDate;
   final DateTime addedDate;
+  final String category; // 🆕 Додали категорію (назву іконки)
 
   Product({
     required this.id,
     required this.name,
     required this.expirationDate,
     required this.addedDate,
+    required this.category, // 🆕
   });
 
   // Перетворюємо дані з Бази в Продукт
@@ -21,6 +23,7 @@ class Product {
       name: data['name'] ?? '',
       expirationDate: (data['expirationDate'] as Timestamp).toDate(),
       addedDate: (data['addedDate'] as Timestamp).toDate(),
+      category: data['category'] ?? 'other', // 🆕 Якщо категорії немає, буде "інше"
     );
   }
 
@@ -30,6 +33,7 @@ class Product {
       'name': name,
       'expirationDate': expirationDate,
       'addedDate': addedDate,
+      'category': category, // 🆕
     };
   }
 

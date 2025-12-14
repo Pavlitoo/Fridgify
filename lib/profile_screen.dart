@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'translations.dart'; // ВАЖЛИВО: Імпорт перекладу
+import 'translations.dart'; // ВАЖЛИВО!
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -60,7 +60,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Слухаємо мову, щоб екран оновлювався миттєво
     return ValueListenableBuilder<String>(
       valueListenable: languageNotifier,
       builder: (context, currentLang, child) {
@@ -75,30 +74,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 40),
-                // Аватарка
-                Container(
-                  width: 120, height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 4),
-                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
-                  ),
-                  child: CircleAvatar(
-                    radius: 60,
-                    backgroundColor: Colors.green.shade300,
-                    backgroundImage: user.photoURL != null ? NetworkImage(user.photoURL!) : null,
-                    child: user.photoURL == null
-                        ? Text(user.displayName?[0].toUpperCase() ?? 'U', style: const TextStyle(fontSize: 50, color: Colors.white))
-                        : null,
-                  ),
+                CircleAvatar(
+                  radius: 60,
+                  backgroundColor: Colors.green.shade300,
+                  backgroundImage: user.photoURL != null ? NetworkImage(user.photoURL!) : null,
+                  child: user.photoURL == null
+                      ? Text(user.displayName?[0].toUpperCase() ?? 'U', style: const TextStyle(fontSize: 50, color: Colors.white))
+                      : null,
                 ),
                 const SizedBox(height: 20),
                 Text(user.displayName ?? 'User', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green.shade900)),
                 Text(user.email ?? '', style: TextStyle(fontSize: 16, color: Colors.grey.shade600)),
-
                 const SizedBox(height: 40),
-
-                // Налаштування
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 20),
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, 5))]),
@@ -131,7 +118,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade400, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 55), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
                   ),
                 ),
-                const SizedBox(height: 20),
               ],
             ),
           ),
@@ -154,8 +140,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 20),
               _languageOption("Українська", "🇺🇦"),
               _languageOption("English", "🇺🇸"),
-              _languageOption("Español", "🇪🇸"), // Іспанська
-              _languageOption("Français", "🇫🇷"), // Французька
+              _languageOption("Español", "🇪🇸"),
+              _languageOption("Français", "🇫🇷"),
             ],
           ),
         );
