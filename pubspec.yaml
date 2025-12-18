@@ -22,6 +22,7 @@ dependencies:
   # UI
   cupertino_icons: ^1.0.6
   font_awesome_flutter: ^10.7.0
+  fl_chart: ^0.66.0 # Графіки
 
   # Internet
   http: ^1.2.0
@@ -31,13 +32,33 @@ dependencies:
   flutter_local_notifications: ^17.1.0
   timezone: ^0.9.2
 
-  # 👇 ДОДАНО ДЛЯ СТАТИСТИКИ
-  fl_chart: ^1.1.1
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
 
+  # 👇 ГЕНЕРАТОРИ ІКОНОК ТА ЗАСТАВКИ
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.3.10
+
 flutter:
   uses-material-design: true
+
+  # 👇 ВАЖЛИВО: ВІДКРИВАЄМО ДОСТУП ДО КАРТИНКИ
+  assets:
+    - assets/logo.png
+
+# --- НАЛАШТУВАННЯ ІКОНКИ ---
+flutter_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/logo.png" # Шлях до твого лого
+  min_sdk_android: 21
+
+# --- НАЛАШТУВАННЯ ЗАСТАВКИ (SPLASH) ---
+flutter_native_splash:
+  color: "#4CAF50" # Зелений колір фону (як у твоєму додатку)
+  image: "assets/logo.png" # Логотип по центру
+  android_12:
+    color: "#4CAF50"
+    image: "assets/logo.png"

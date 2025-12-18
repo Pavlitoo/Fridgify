@@ -14,10 +14,9 @@ import 'profile_screen.dart';
 import 'translations.dart';
 import 'notification_service.dart';
 import 'shopping_list_screen.dart';
-// 👇 НОВИЙ ІМПОРТ
 import 'stats_screen.dart';
 
-// 👇 ВСТАВ КЛЮЧ
+// 👇 YOUR SPOONACULAR KEY
 const String spoonacularApiKey = '0699d942fb5e4acaa71980cc7207cef0';
 // ----------------------------------------
 
@@ -54,7 +53,7 @@ class SmartFridgeApp extends StatelessWidget {
   }
 }
 
-// --- AUTH SCREEN (Без змін) ---
+// --- AUTH SCREEN ---
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
   @override
@@ -111,7 +110,7 @@ class _AuthScreenState extends State<AuthScreen> {
             padding: const EdgeInsets.all(24.0),
             child: Column(
               children: [
-                Icon(Icons.kitchen, size: 100, color: Colors.green.shade700),
+                Image.asset('assets/logo.png', height: 120),
                 const SizedBox(height: 20),
                 Text(isLogin ? AppText.get('login_title') : AppText.get('signup_title'), style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green.shade900)),
                 const SizedBox(height: 40),
@@ -178,7 +177,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// --- FRIDGE CONTENT (ОНОВЛЕНО) ---
+// --- FRIDGE CONTENT ---
 class FridgeContent extends StatefulWidget {
   const FridgeContent({super.key});
   @override
@@ -211,16 +210,14 @@ class _FridgeContentState extends State<FridgeContent> {
     });
   }
 
-  // 📝 LOG HISTORY (Eaten/Wasted)
   Future<void> _logHistory(String action, String productName) async {
     await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('history').add({
-      'action': action, // 'eaten' or 'wasted'
+      'action': action,
       'product': productName,
       'date': Timestamp.now(),
     });
   }
 
-  // 🗑️ DELETE CONFIRMATION DIALOG
   void _confirmDeleteOrMove(Product product) {
     showDialog(
       context: context,
@@ -228,12 +225,10 @@ class _FridgeContentState extends State<FridgeContent> {
         title: Text(AppText.get('delete_title'), textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
         content: Text(AppText.get('delete_msg'), textAlign: TextAlign.center),
         actionsAlignment: MainAxisAlignment.center,
-        // 👇 ОНОВЛЕНИЙ ВИГЛЯД КНОПОК
         actions: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              // 😋 EATEN
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -249,7 +244,6 @@ class _FridgeContentState extends State<FridgeContent> {
                   Text(AppText.get('action_eaten'), style: const TextStyle(fontSize: 12)),
                 ],
               ),
-              // 🗑️ WASTED
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -265,16 +259,13 @@ class _FridgeContentState extends State<FridgeContent> {
                   Text(AppText.get('action_wasted'), style: const TextStyle(fontSize: 12)),
                 ],
               ),
-              // 🛒 TO LIST
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
                     icon: const Icon(Icons.add_shopping_cart, color: Colors.blue, size: 36),
                     onPressed: () async {
-                      // Log as eaten (usually)
                       _logHistory('eaten', product.name);
-                      // Add to shopping list
                       await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('shopping_list').add({
                         'name': product.name, 'isBought': false, 'addedDate': Timestamp.now(),
                       });
@@ -303,12 +294,26 @@ class _FridgeContentState extends State<FridgeContent> {
     showDialog(context: context, barrierDismissible: false, builder: (ctx) => Center(child: Card(child: Padding(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children: [const CircularProgressIndicator(), const SizedBox(height: 20), Text(AppText.get('loading'))])))));
 
     try {
-      final uri = Uri.parse('https://api.spoonacular.com/recipes/findByIngredients?ingredients=$ingredients&number=10&ranking=1&apiKey=$spoonacularApiKey');
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final settings = userDoc.data()?['settings'] ?? {};
+
+      final bool isVeg = settings['is_vegetarian'] ?? false;
+      final bool isGluten = settings['is_gluten_free'] ?? false;
+      final bool isQuick = settings['is_quick'] ?? false;
+
+      String dietParam = isVeg ? '&diet=vegetarian' : '';
+      String intolerancesParam = isGluten ? '&intolerances=gluten' : '';
+      String timeParam = isQuick ? '&maxReadyTime=30' : '';
+
+      final uri = Uri.parse(
+          'https://api.spoonacular.com/recipes/complexSearch?includeIngredients=$ingredients&number=10&ranking=1&fillIngredients=true$dietParam$intolerancesParam$timeParam&apiKey=$spoonacularApiKey'
+      );
+
       final response = await http.get(uri);
       Navigator.pop(context);
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
+        final List<dynamic> data = json.decode(response.body)['results'];
         _showResults(data);
         setState(() { _selectedProductIds.clear(); _selectedProductNames.clear(); });
       } else { throw Exception('API Error: ${response.statusCode}'); }
@@ -471,7 +476,6 @@ class _FridgeContentState extends State<FridgeContent> {
                             : Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: iconColor.withOpacity(0.15), shape: BoxShape.circle), child: Icon(iconData, color: iconColor, size: 32)),
                         title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
                         subtitle: Padding(padding: const EdgeInsets.only(top: 6.0), child: Row(children: [Icon(Icons.timer_outlined, size: 18, color: statusColor), const SizedBox(width: 6), Text("${AppText.get('days_left')} ${product.daysLeft}", style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 16))])),
-                        // 👇 КНОПКА ВИДАЛЕННЯ ТЕПЕР ВИКЛИКАЄ ДІАЛОГ
                         trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 28), onPressed: () => _confirmDeleteOrMove(product)),
                       ),
                     ),
@@ -494,7 +498,7 @@ class _FridgeContentState extends State<FridgeContent> {
   }
 }
 
-// Анімація
+// Animation
 class SlideInAnimation extends StatefulWidget {
   final Widget child;
   final int delay;

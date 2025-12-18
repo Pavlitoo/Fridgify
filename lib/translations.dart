@@ -52,7 +52,6 @@ class AppText {
       'stats_desc': 'Ваш внесок у збереження їжі',
       'action_eaten': 'З\'їв',
       'action_wasted': 'Викинув',
-      // 👇 НОВІ ПЕРЕКЛАДИ ДЛЯ ГРАФІКА
       'st_products': 'Продуктів',
       'st_history': 'Загальна історія',
       'st_efficiency': 'Ефективність',
@@ -60,6 +59,11 @@ class AppText {
       'st_select': 'Оберіть',
       'st_saved': 'Врятовано',
       'st_lost': 'Втрачено',
+      // 👇 ФІЛЬТРИ (DIET)
+      'diet_pref': 'Дієта та Час',
+      'diet_veg': 'Вегетаріанське 🥦',
+      'diet_gluten': 'Без глютену 🌾',
+      'diet_quick': 'Швидко (< 30 хв) ⏱️',
     },
     'English': {
       'app_title': 'Smart Fridge',
@@ -109,7 +113,6 @@ class AppText {
       'stats_desc': 'Your contribution',
       'action_eaten': 'Ate it',
       'action_wasted': 'Wasted',
-      // 👇 NEW CHART LABELS
       'st_products': 'Products',
       'st_history': 'Total History',
       'st_efficiency': 'Efficiency',
@@ -117,7 +120,13 @@ class AppText {
       'st_select': 'Select',
       'st_saved': 'Saved',
       'st_lost': 'Lost',
+      // 👇 FILTERS
+      'diet_pref': 'Diet & Time',
+      'diet_veg': 'Vegetarian 🥦',
+      'diet_gluten': 'Gluten Free 🌾',
+      'diet_quick': 'Quick (< 30 min) ⏱️',
     },
+    // (Інші мови теж можна доповнити)
     'Español': {
       'app_title': 'Smart Fridge',
       'login_title': '¡Bienvenido!',
@@ -166,7 +175,6 @@ class AppText {
       'stats_desc': 'Tu contribución',
       'action_eaten': 'Comí',
       'action_wasted': 'Tiré',
-      // 👇 NEW CHART LABELS
       'st_products': 'Productos',
       'st_history': 'Historia total',
       'st_efficiency': 'Eficiencia',
@@ -174,6 +182,11 @@ class AppText {
       'st_select': 'Elegir',
       'st_saved': 'Salvado',
       'st_lost': 'Perdido',
+      // FILTERS
+      'diet_pref': 'Dieta y Tiempo',
+      'diet_veg': 'Vegetariano 🥦',
+      'diet_gluten': 'Sin Gluten 🌾',
+      'diet_quick': 'Rápido (< 30 min) ⏱️',
     },
     'Français': {
       'app_title': 'Smart Fridge',
@@ -223,7 +236,6 @@ class AppText {
       'stats_desc': 'Votre contribution',
       'action_eaten': 'Mangé',
       'action_wasted': 'Jeté',
-      // 👇 NEW CHART LABELS
       'st_products': 'Produits',
       'st_history': 'Historique total',
       'st_efficiency': 'Efficacité',
@@ -231,6 +243,11 @@ class AppText {
       'st_select': 'Choisir',
       'st_saved': 'Sauvé',
       'st_lost': 'Perdu',
+      // FILTERS
+      'diet_pref': 'Régime & Temps',
+      'diet_veg': 'Végétarien 🥦',
+      'diet_gluten': 'Sans Gluten 🌾',
+      'diet_quick': 'Rapide (< 30 min) ⏱️',
     },
   };
 

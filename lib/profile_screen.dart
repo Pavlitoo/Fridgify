@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'translations.dart';
-import 'stats_screen.dart'; // 🆕 IMPORT
+import 'stats_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -15,6 +15,11 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final user = FirebaseAuth.instance.currentUser!;
   bool _notificationsEnabled = false;
+
+  // 🆕 DIET SETTINGS
+  bool _isVegetarian = false;
+  bool _isGlutenFree = false;
+  bool _isQuick = false;
 
   @override
   void initState() {
@@ -29,6 +34,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) {
         setState(() {
           _notificationsEnabled = settings['push_enabled'] ?? false;
+          // 🆕 LOAD DIET SETTINGS
+          _isVegetarian = settings['is_vegetarian'] ?? false;
+          _isGlutenFree = settings['is_gluten_free'] ?? false;
+          _isQuick = settings['is_quick'] ?? false;
+
           if (settings.containsKey('language')) {
             languageNotifier.value = settings['language'];
           }
@@ -92,7 +102,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, 5))]),
                   child: Column(
                     children: [
-                      // 📊 СТАТИСТИКА
+                      // STATS
                       ListTile(
                         leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.purple.shade50, shape: BoxShape.circle), child: Icon(Icons.pie_chart, color: Colors.purple.shade700)),
                         title: Text(AppText.get('stats_title'), style: const TextStyle(fontWeight: FontWeight.w500)),
@@ -101,7 +111,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       Divider(height: 1, color: Colors.grey.shade100, indent: 60, endIndent: 20),
 
-                      // 🌐 МОВА
+                      // 🆕 DIET SECTION HEADER
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 15, 20, 5),
+                        child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(AppText.get('diet_pref'), style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 13))
+                        ),
+                      ),
+
+                      // 🥦 VEGETARIAN
+                      SwitchListTile(
+                        secondary: const Icon(Icons.eco, color: Colors.green),
+                        title: Text(AppText.get('diet_veg')),
+                        value: _isVegetarian,
+                        activeColor: Colors.green,
+                        onChanged: (val) {
+                          setState(() => _isVegetarian = val);
+                          _updateSettings('is_vegetarian', val);
+                        },
+                      ),
+                      // 🌾 GLUTEN FREE
+                      SwitchListTile(
+                        secondary: const Icon(Icons.spa, color: Colors.amber),
+                        title: Text(AppText.get('diet_gluten')),
+                        value: _isGlutenFree,
+                        activeColor: Colors.amber,
+                        onChanged: (val) {
+                          setState(() => _isGlutenFree = val);
+                          _updateSettings('is_gluten_free', val);
+                        },
+                      ),
+                      // ⏱️ QUICK
+                      SwitchListTile(
+                        secondary: const Icon(Icons.timer, color: Colors.blue),
+                        title: Text(AppText.get('diet_quick')),
+                        value: _isQuick,
+                        activeColor: Colors.blue,
+                        onChanged: (val) {
+                          setState(() => _isQuick = val);
+                          _updateSettings('is_quick', val);
+                        },
+                      ),
+
+                      Divider(height: 1, color: Colors.grey.shade100, indent: 20, endIndent: 20),
+
+                      // LANGUAGE
                       ListTile(
                         leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.blue.shade50, shape: BoxShape.circle), child: Icon(Icons.language, color: Colors.blue.shade700)),
                         title: Text(AppText.get('language'), style: const TextStyle(fontWeight: FontWeight.w500)),
@@ -109,9 +164,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                         onTap: () => _showLanguageDialog(),
                       ),
-                      Divider(height: 1, color: Colors.grey.shade100, indent: 60, endIndent: 20),
 
-                      // 🔔 СПОВІЩЕННЯ
+                      // NOTIFICATIONS
                       ListTile(
                         leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.orange.shade50, shape: BoxShape.circle), child: Icon(Icons.notifications_active, color: Colors.orange.shade700)),
                         title: Text(AppText.get('push_notif'), style: const TextStyle(fontWeight: FontWeight.w500)),
