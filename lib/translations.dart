@@ -4,6 +4,7 @@ final ValueNotifier<String> languageNotifier = ValueNotifier('Українськ
 
 class AppText {
   static const Map<String, Map<String, String>> _db = {
+    // 🇺🇦 УКРАЇНСЬКА
     'Українська': {
       'app_title': 'Smart Fridge',
       'login_title': 'З поверненням!',
@@ -30,7 +31,10 @@ class AppText {
       'push_notif': 'Push-сповіщення',
       'push_desc': 'Нагадувати про продукти',
       'logout': 'Вийти з акаунту',
+      // 👇 ВИПРАВЛЕНО: ПЕРЕКЛАДИ ДЛЯ ДІАЛОГУ
       'days_valid': 'Придатний днів:',
+      'days_count': 'днів',
+      'category_label': 'Категорія:',
       // RECIPES
       'cook_btn': 'Знайти рецепти',
       'loading': 'Шукаємо смачненьке...',
@@ -59,12 +63,24 @@ class AppText {
       'st_select': 'Оберіть',
       'st_saved': 'Врятовано',
       'st_lost': 'Втрачено',
-      // 👇 ФІЛЬТРИ (DIET)
+      // DIET
       'diet_pref': 'Дієта та Час',
       'diet_veg': 'Вегетаріанське 🥦',
       'diet_gluten': 'Без глютену 🌾',
       'diet_quick': 'Швидко (< 30 хв) ⏱️',
+      // 👇 КАТЕГОРІЇ
+      'cat_all': 'Всі',
+      'cat_other': 'Інше',
+      'cat_meat': 'М\'ясо',
+      'cat_veg': 'Овочі',
+      'cat_fruit': 'Фрукти',
+      'cat_dairy': 'Молочне',
+      'cat_bakery': 'Випічка',
+      'cat_sweet': 'Солодке',
+      'cat_drink': 'Напої',
     },
+
+    // 🇺🇸 ENGLISH
     'English': {
       'app_title': 'Smart Fridge',
       'login_title': 'Welcome Back!',
@@ -91,7 +107,9 @@ class AppText {
       'push_notif': 'Push Notifications',
       'push_desc': 'Remind about products',
       'logout': 'Log Out',
-      'days_valid': 'Valid for (days):',
+      'days_valid': 'Valid for:',
+      'days_count': 'days',
+      'category_label': 'Category:',
       // RECIPES
       'cook_btn': 'Find Recipes',
       'loading': 'Searching recipes...',
@@ -120,13 +138,24 @@ class AppText {
       'st_select': 'Select',
       'st_saved': 'Saved',
       'st_lost': 'Lost',
-      // 👇 FILTERS
+      // FILTERS
       'diet_pref': 'Diet & Time',
       'diet_veg': 'Vegetarian 🥦',
       'diet_gluten': 'Gluten Free 🌾',
       'diet_quick': 'Quick (< 30 min) ⏱️',
+      // CATEGORIES
+      'cat_all': 'All',
+      'cat_other': 'Other',
+      'cat_meat': 'Meat',
+      'cat_veg': 'Veggie',
+      'cat_fruit': 'Fruit',
+      'cat_dairy': 'Dairy',
+      'cat_bakery': 'Bakery',
+      'cat_sweet': 'Sweet',
+      'cat_drink': 'Drink',
     },
-    // (Інші мови теж можна доповнити)
+
+    // 🇪🇸 ESPAÑOL (ПОВНИЙ ПЕРЕКЛАД)
     'Español': {
       'app_title': 'Smart Fridge',
       'login_title': '¡Bienvenido!',
@@ -153,7 +182,10 @@ class AppText {
       'push_notif': 'Notificaciones',
       'push_desc': 'Recordar productos',
       'logout': 'Cerrar sesión',
-      'days_valid': 'Válido por (días):',
+      // 👇 ВИПРАВЛЕНО
+      'days_valid': 'Válido por:',
+      'days_count': 'días',
+      'category_label': 'Categoría:',
       // RECETAS
       'cook_btn': 'Buscar Recetas',
       'loading': 'Buscando recetas...',
@@ -187,7 +219,19 @@ class AppText {
       'diet_veg': 'Vegetariano 🥦',
       'diet_gluten': 'Sin Gluten 🌾',
       'diet_quick': 'Rápido (< 30 min) ⏱️',
+      // 👇 КАТЕГОРІЇ
+      'cat_all': 'Todos',
+      'cat_other': 'Otro',
+      'cat_meat': 'Carne',
+      'cat_veg': 'Verduras',
+      'cat_fruit': 'Frutas',
+      'cat_dairy': 'Lácteos',
+      'cat_bakery': 'Panadería',
+      'cat_sweet': 'Dulces',
+      'cat_drink': 'Bebidas',
     },
+
+    // 🇫🇷 FRANÇAIS (ПОВНИЙ ПЕРЕКЛАД)
     'Français': {
       'app_title': 'Smart Fridge',
       'login_title': 'Bienvenue !',
@@ -214,7 +258,10 @@ class AppText {
       'push_notif': 'Notifications',
       'push_desc': 'Rappel des produits',
       'logout': 'Se déconnecter',
-      'days_valid': 'Valable pour (jours) :',
+      // 👇 ВИПРАВЛЕНО
+      'days_valid': 'Valable pour :',
+      'days_count': 'jours',
+      'category_label': 'Catégorie :',
       // RECETTES
       'cook_btn': 'Trouver des recettes',
       'loading': 'Recherche de recettes...',
@@ -248,12 +295,22 @@ class AppText {
       'diet_veg': 'Végétarien 🥦',
       'diet_gluten': 'Sans Gluten 🌾',
       'diet_quick': 'Rapide (< 30 min) ⏱️',
+      // 👇 КАТЕГОРІЇ
+      'cat_all': 'Tous',
+      'cat_other': 'Autre',
+      'cat_meat': 'Viande',
+      'cat_veg': 'Légumes',
+      'cat_fruit': 'Fruits',
+      'cat_dairy': 'Produits laitiers',
+      'cat_bakery': 'Boulangerie',
+      'cat_sweet': 'Sucreries',
+      'cat_drink': 'Boissons',
     },
   };
 
   static String get(String key) {
     String lang = languageNotifier.value;
     if (!_db.containsKey(lang)) lang = 'Українська';
-    return _db[lang]?[key] ?? key;
+    return _db[lang]?[key] ?? _db['English']?[key] ?? key;
   }
 }

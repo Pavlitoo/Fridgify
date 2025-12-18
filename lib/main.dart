@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'firebase_options.dart';
@@ -15,10 +14,32 @@ import 'translations.dart';
 import 'notification_service.dart';
 import 'shopping_list_screen.dart';
 import 'stats_screen.dart';
+// 👇 НОВИЙ СЕРВІС
+import 'ai_service.dart';
 
-// 👇 YOUR SPOONACULAR KEY
-const String spoonacularApiKey = '0699d942fb5e4acaa71980cc7207cef0';
 // ----------------------------------------
+
+// Helper class for Categories
+class CategoryData {
+  final String id;
+  final IconData icon;
+  final Color color;
+  final String labelKey;
+
+  CategoryData(this.id, this.icon, this.color, this.labelKey);
+}
+
+// List of all categories
+final List<CategoryData> appCategories = [
+  CategoryData('other', Icons.fastfood, Colors.grey, 'cat_other'),
+  CategoryData('meat', Icons.set_meal, Colors.red, 'cat_meat'),
+  CategoryData('veg', Icons.eco, Colors.green, 'cat_veg'),
+  CategoryData('fruit', Icons.emoji_food_beverage, Colors.orange, 'cat_fruit'),
+  CategoryData('dairy', Icons.egg, Colors.blueGrey, 'cat_dairy'),
+  CategoryData('bakery', Icons.breakfast_dining, Colors.brown, 'cat_bakery'),
+  CategoryData('sweet', Icons.cake, Colors.pink, 'cat_sweet'),
+  CategoryData('drink', Icons.local_drink, Colors.blue, 'cat_drink'),
+];
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,7 +59,11 @@ class SmartFridgeApp extends StatelessWidget {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Smart Fridge',
-          theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.green, brightness: Brightness.light), useMaterial3: true, fontFamily: 'Roboto'),
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.green, brightness: Brightness.light),
+            useMaterial3: true,
+            fontFamily: 'Roboto',
+          ),
           home: StreamBuilder<User?>(
             stream: FirebaseAuth.instance.authStateChanges(),
             builder: (context, snapshot) {
@@ -53,7 +78,7 @@ class SmartFridgeApp extends StatelessWidget {
   }
 }
 
-// --- AUTH SCREEN ---
+// --- AUTH SCREEN (Без змін) ---
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
   @override
@@ -188,15 +213,7 @@ class _FridgeContentState extends State<FridgeContent> {
   final user = FirebaseAuth.instance.currentUser!;
   final Set<String> _selectedProductIds = {};
   final List<String> _selectedProductNames = [];
-
-  final Map<String, IconData> _categoryIcons = {
-    'other': Icons.fastfood, 'meat': Icons.set_meal, 'veg': Icons.eco, 'fruit': Icons.emoji_food_beverage,
-    'dairy': Icons.egg, 'bakery': Icons.breakfast_dining, 'sweet': Icons.cake, 'drink': Icons.local_drink,
-  };
-  final Map<String, Color> _categoryColors = {
-    'other': Colors.grey, 'meat': Colors.red, 'veg': Colors.green, 'fruit': Colors.orange,
-    'dairy': Colors.blueGrey, 'bakery': Colors.brown, 'sweet': Colors.pink, 'drink': Colors.blue,
-  };
+  String _selectedCategoryFilter = 'all';
 
   void _toggleSelection(String id, String name) {
     setState(() {
@@ -229,54 +246,27 @@ class _FridgeContentState extends State<FridgeContent> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.sentiment_very_satisfied, color: Colors.green, size: 36),
-                    onPressed: () {
-                      _logHistory('eaten', product.name);
-                      _deleteProduct(product);
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${AppText.get('action_eaten')}! +1 🌿"), backgroundColor: Colors.green));
-                    },
-                  ),
-                  Text(AppText.get('action_eaten'), style: const TextStyle(fontSize: 12)),
-                ],
-              ),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.delete_forever, color: Colors.redAccent, size: 36),
-                    onPressed: () {
-                      _logHistory('wasted', product.name);
-                      _deleteProduct(product);
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${AppText.get('action_wasted')} 😞"), backgroundColor: Colors.redAccent));
-                    },
-                  ),
-                  Text(AppText.get('action_wasted'), style: const TextStyle(fontSize: 12)),
-                ],
-              ),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.add_shopping_cart, color: Colors.blue, size: 36),
-                    onPressed: () async {
-                      _logHistory('eaten', product.name);
-                      await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('shopping_list').add({
-                        'name': product.name, 'isBought': false, 'addedDate': Timestamp.now(),
-                      });
-                      _deleteProduct(product);
-                      if(mounted) Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Moved to List! 🛒"), backgroundColor: Colors.blue));
-                    },
-                  ),
-                  Text("List", style: const TextStyle(fontSize: 12)),
-                ],
-              ),
+              _actionButton(Icons.sentiment_very_satisfied, Colors.green, AppText.get('action_eaten'), () {
+                _logHistory('eaten', product.name);
+                _deleteProduct(product);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${AppText.get('action_eaten')}! +1 🌿"), backgroundColor: Colors.green));
+              }),
+              _actionButton(Icons.delete_forever, Colors.redAccent, AppText.get('action_wasted'), () {
+                _logHistory('wasted', product.name);
+                _deleteProduct(product);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${AppText.get('action_wasted')} 😞"), backgroundColor: Colors.redAccent));
+              }),
+              _actionButton(Icons.add_shopping_cart, Colors.blue, "List", () async {
+                _logHistory('eaten', product.name);
+                await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('shopping_list').add({
+                  'name': product.name, 'isBought': false, 'addedDate': Timestamp.now(),
+                });
+                _deleteProduct(product);
+                if(mounted) Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Moved to List! 🛒"), backgroundColor: Colors.blue));
+              }),
             ],
           )
         ],
@@ -284,14 +274,41 @@ class _FridgeContentState extends State<FridgeContent> {
     );
   }
 
+  Widget _actionButton(IconData icon, Color color, String label, VoidCallback onTap) {
+    return Column(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: Icon(icon, color: color, size: 36), onPressed: onTap), Text(label, style: const TextStyle(fontSize: 12))]);
+  }
+
   void _deleteProduct(Product product) {
     NotificationService().cancelNotification(product.id.hashCode);
     FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products').doc(product.id).delete();
   }
 
+  // 👇 НОВА ФУНКЦІЯ: AI CHEF
   Future<void> _searchRecipes() async {
-    final ingredients = _selectedProductNames.join(',');
-    showDialog(context: context, barrierDismissible: false, builder: (ctx) => Center(child: Card(child: Padding(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children: [const CircularProgressIndicator(), const SizedBox(height: 20), Text(AppText.get('loading'))])))));
+    final ingredients = _selectedProductNames.join(', ');
+
+    // Показуємо діалог завантаження
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Center(
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 20),
+                Text(AppText.get('loading'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                const Text("AI Chef думає... 👨‍🍳", style: TextStyle(fontSize: 12, color: Colors.grey)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
 
     try {
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
@@ -301,29 +318,34 @@ class _FridgeContentState extends State<FridgeContent> {
       final bool isGluten = settings['is_gluten_free'] ?? false;
       final bool isQuick = settings['is_quick'] ?? false;
 
-      String dietParam = isVeg ? '&diet=vegetarian' : '';
-      String intolerancesParam = isGluten ? '&intolerances=gluten' : '';
-      String timeParam = isQuick ? '&maxReadyTime=30' : '';
+      // Формуємо рядок дієти
+      String diet = "";
+      if (isVeg) diet += "vegetarian, ";
+      if (isGluten) diet += "gluten free, ";
+      if (isQuick) diet += "quick meal";
 
-      final uri = Uri.parse(
-          'https://api.spoonacular.com/recipes/complexSearch?includeIngredients=$ingredients&number=10&ranking=1&fillIngredients=true$dietParam$intolerancesParam$timeParam&apiKey=$spoonacularApiKey'
+      // 🧠 ВИКЛИК AI
+      final recipes = await AiRecipeService().getRecipes(
+        ingredients: _selectedProductNames,
+        userLanguage: languageNotifier.value,
+        diet: diet,
       );
 
-      final response = await http.get(uri);
-      Navigator.pop(context);
+      Navigator.pop(context); // Закриваємо лоадер
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body)['results'];
-        _showResults(data);
+      if (recipes.isNotEmpty) {
+        _showResults(recipes);
         setState(() { _selectedProductIds.clear(); _selectedProductNames.clear(); });
-      } else { throw Exception('API Error: ${response.statusCode}'); }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("AI не зміг придумати рецепт спробуйте ще раз 🤔"), backgroundColor: Colors.orange));
+      }
     } catch (e) {
       if(mounted && Navigator.canPop(context)) Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${AppText.get('error')}: $e"), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("AI Error: $e"), backgroundColor: Colors.red));
     }
   }
 
-  void _showResults(List<dynamic> recipes) {
+  void _showResults(List<Map<String, dynamic>> recipes) {
     showModalBottomSheet(
       context: context, isScrollControlled: true, backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
@@ -336,47 +358,55 @@ class _FridgeContentState extends State<FridgeContent> {
               Padding(padding: const EdgeInsets.all(16.0), child: Text(AppText.get('recipe_title'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.green))),
               const Divider(),
               Expanded(
-                child: recipes.isEmpty
-                    ? const Center(child: Text("Nothing found 😔"))
-                    : ListView.builder(
+                child: ListView.builder(
                   controller: controller,
                   itemCount: recipes.length,
                   itemBuilder: (context, index) {
                     final recipe = recipes[index];
-                    final missedCount = recipe['missedIngredientCount'];
-                    final List<dynamic> missedList = recipe['missedIngredients'] ?? [];
-                    final String missedString = missedList.map((e) => e['originalName'] ?? e['name']).join(', ');
+                    final missingList = List<String>.from(recipe['missingIngredients'] ?? []);
 
                     return Card(
                       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       elevation: 3,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () async {
-                          final id = recipe['id'];
-                          final title = recipe['title'].toString().replaceAll(' ', '-');
-                          final url = Uri.parse("https://spoonacular.com/recipes/$title-$id");
-                          if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Could not open link")));
-                          }
-                        },
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(16)), child: Image.network(recipe['image'], height: 180, width: double.infinity, fit: BoxFit.cover, errorBuilder: (c,e,s) => Container(height: 150, color: Colors.grey[300], child: const Icon(Icons.broken_image)))),
-                          Padding(padding: const EdgeInsets.all(16.0), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(recipe['title'], style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 🍲 EMOJI + TITLE
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(recipe['emoji'] ?? '🍳', style: const TextStyle(fontSize: 40)),
+                                const SizedBox(width: 12),
+                                Expanded(child: Text(recipe['title'], style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                              ],
+                            ),
                             const SizedBox(height: 8),
-                            if (missedCount > 0) ...[
-                              Text("${AppText.get('missed')} ($missedCount)", style: const TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold, fontSize: 14)),
+                            Text(recipe['description'] ?? '', style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
+                            const Divider(height: 20),
+
+                            // 📋 MISSING INGREDIENTS
+                            if (missingList.isNotEmpty) ...[
+                              Text("${AppText.get('missed')} (${missingList.length})", style: const TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 4),
-                              Text(missedString, style: TextStyle(color: Colors.grey[700], fontSize: 14))
-                            ] else const Text("You have everything! ✅", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 15),
-                            SizedBox(width: double.infinity, child: ElevatedButton.icon(icon: const Icon(Icons.menu_book, color: Colors.white), label: const Text("Read Recipe", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: () async {
-                              final id = recipe['id']; final title = recipe['title'].toString().replaceAll(' ', '-'); final url = Uri.parse("https://spoonacular.com/recipes/$title-$id"); await launchUrl(url, mode: LaunchMode.externalApplication);
-                            })),
-                          ])),
-                        ]),
+                              Wrap(spacing: 6, children: missingList.map((ing) => Chip(label: Text(ing, style: const TextStyle(fontSize: 12)), backgroundColor: Colors.orange.shade50, padding: EdgeInsets.zero, visualDensity: VisualDensity.compact)).toList()),
+                              const SizedBox(height: 10),
+                            ],
+
+                            // 📝 INSTRUCTIONS
+                            ExpansionTile(
+                              title: const Text("Інструкція", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Text(recipe['instructions'] ?? 'No instructions', style: const TextStyle(fontSize: 14, height: 1.4)),
+                                )
+                              ],
+                            )
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -402,15 +432,15 @@ class _FridgeContentState extends State<FridgeContent> {
         content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
           TextField(controller: nameController, style: const TextStyle(fontSize: 18), decoration: InputDecoration(labelText: AppText.get('product_name'), prefixIcon: const Icon(Icons.edit, color: Colors.green), filled: true, fillColor: Colors.grey.shade50, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)), autofocus: true),
           const SizedBox(height: 24),
-          const Text("Category:", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          Text(AppText.get('category_label'), style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          Wrap(alignment: WrapAlignment.center, spacing: 12, runSpacing: 10, children: _categoryIcons.entries.map((entry) {
-            final isSelected = selectedCategory == entry.key;
-            return InkWell(onTap: () => setDialogState(() => selectedCategory = entry.key), child: AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: isSelected ? _categoryColors[entry.key] : Colors.grey.shade100, shape: BoxShape.circle, boxShadow: isSelected ? [BoxShadow(color: _categoryColors[entry.key]!.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))] : []), child: Icon(entry.value, color: isSelected ? Colors.white : Colors.grey, size: 28)));
+          Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 10, children: appCategories.map((cat) {
+            final isSelected = selectedCategory == cat.id;
+            return InkWell(onTap: () => setDialogState(() => selectedCategory = cat.id), child: Column(mainAxisSize: MainAxisSize.min, children: [AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: isSelected ? cat.color : Colors.grey.shade100, shape: BoxShape.circle, boxShadow: isSelected ? [BoxShadow(color: cat.color.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))] : []), child: Icon(cat.icon, color: isSelected ? Colors.white : Colors.grey, size: 28)), const SizedBox(height: 4), Text(AppText.get(cat.labelKey), style: TextStyle(fontSize: 10, color: isSelected ? cat.color : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal))]));
           }).toList()),
           const SizedBox(height: 30),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(AppText.get('days_valid'), style: const TextStyle(fontSize: 16, color: Colors.grey)),
-            Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)), child: Text("$daysToExpire days", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 18)))]),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)), child: Text("$daysToExpire ${AppText.get('days_count')}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 18)))]),
           const SizedBox(height: 10),
           SliderTheme(data: SliderTheme.of(context).copyWith(activeTrackColor: Colors.green, inactiveTrackColor: Colors.green.shade100, trackShape: const RoundedRectSliderTrackShape(), trackHeight: 12.0, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 15.0), thumbColor: Colors.white, overlayColor: Colors.green.withAlpha(32), overlayShape: const RoundSliderOverlayShape(overlayRadius: 28.0), tickMarkShape: const RoundSliderTickMarkShape(), activeTickMarkColor: Colors.green.shade200, inactiveTickMarkColor: Colors.green.shade100, valueIndicatorShape: const PaddleSliderValueIndicatorShape(), valueIndicatorColor: Colors.green, valueIndicatorTextStyle: const TextStyle(color: Colors.white)), child: Slider(value: daysToExpire.toDouble(), min: 1, max: 30, divisions: 29, label: "$daysToExpire", onChanged: (val) => setDialogState(() => daysToExpire = val.toInt()))),
         ]))),
@@ -419,7 +449,6 @@ class _FridgeContentState extends State<FridgeContent> {
           ElevatedButton(onPressed: () async { if (nameController.text.isNotEmpty) {
             final expDate = DateTime.now().add(Duration(days: daysToExpire));
             final data = {'name': nameController.text.trim(), 'expirationDate': Timestamp.fromDate(expDate), 'category': selectedCategory};
-
             final collection = FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products');
             if (isEditing) {
               await collection.doc(productToEdit.id).update(data);
@@ -439,62 +468,31 @@ class _FridgeContentState extends State<FridgeContent> {
     return Scaffold(
       backgroundColor: Colors.green.shade50,
       appBar: AppBar(backgroundColor: Colors.green.shade100, title: Text(AppText.get('my_fridge'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24)), centerTitle: true, elevation: 0),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products').orderBy('expirationDate').snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          final docs = snapshot.data!.docs;
-          if (docs.isEmpty) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.kitchen_outlined, size: 100, color: Colors.green.shade200), const SizedBox(height: 20), Text(AppText.get('empty_fridge'), style: const TextStyle(fontSize: 22, color: Colors.grey))]));
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: docs.length,
-            itemBuilder: (context, index) {
-              final product = Product.fromFirestore(docs[index]);
-              final isSelected = _selectedProductIds.contains(product.id);
-              Color statusColor = product.daysLeft < 3 ? Colors.red : (product.daysLeft < 7 ? Colors.orange : Colors.green);
-              final iconData = _categoryIcons[product.category] ?? Icons.fastfood;
-              final iconColor = _categoryColors[product.category] ?? Colors.green;
-
-              return SlideInAnimation(
-                delay: index * 100,
-                child: Card(
-                  color: isSelected ? Colors.green.shade100 : Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: isSelected ? const BorderSide(color: Colors.green, width: 2) : BorderSide.none),
-                  elevation: isSelected ? 0 : 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  child: InkWell(
-                    onTap: () => _toggleSelection(product.id, product.name),
-                    onLongPress: () => _showProductDialog(productToEdit: product),
-                    borderRadius: BorderRadius.circular(20),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                        leading: isSelected
-                            ? const Icon(Icons.check_circle, color: Colors.green, size: 36)
-                            : Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: iconColor.withOpacity(0.15), shape: BoxShape.circle), child: Icon(iconData, color: iconColor, size: 32)),
-                        title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-                        subtitle: Padding(padding: const EdgeInsets.only(top: 6.0), child: Row(children: [Icon(Icons.timer_outlined, size: 18, color: statusColor), const SizedBox(width: 6), Text("${AppText.get('days_left')} ${product.daysLeft}", style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 16))])),
-                        trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 28), onPressed: () => _confirmDeleteOrMove(product)),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _selectedProductIds.isNotEmpty ? _searchRecipes : () => _showProductDialog(),
-        label: Text(_selectedProductIds.isNotEmpty ? AppText.get('cook_btn') : AppText.get('add_product'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        icon: Icon(_selectedProductIds.isNotEmpty ? Icons.restaurant_menu : Icons.add, size: 28),
-        backgroundColor: _selectedProductIds.isNotEmpty ? Colors.deepOrange : Colors.green.shade600,
-        foregroundColor: Colors.white,
-        elevation: 4,
-      ),
+      body: Column(children: [
+        SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), child: Row(children: [_filterChip('all', AppText.get('cat_all'), Icons.grid_view, Colors.black87), ...appCategories.map((cat) => _filterChip(cat.id, AppText.get(cat.labelKey), cat.icon, cat.color))])),
+        Expanded(child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products').orderBy('expirationDate').snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+              final allDocs = snapshot.data!.docs;
+              final docs = _selectedCategoryFilter == 'all' ? allDocs : allDocs.where((doc) => (doc.data() as Map<String, dynamic>)['category'] == _selectedCategoryFilter).toList();
+              if (docs.isEmpty) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.kitchen_outlined, size: 100, color: Colors.green.shade200), const SizedBox(height: 20), Text(AppText.get('empty_fridge'), style: const TextStyle(fontSize: 22, color: Colors.grey))]));
+              return ListView.builder(padding: const EdgeInsets.all(16), itemCount: docs.length, itemBuilder: (context, index) {
+                final product = Product.fromFirestore(docs[index]);
+                final isSelected = _selectedProductIds.contains(product.id);
+                Color statusColor = product.daysLeft < 3 ? Colors.red : (product.daysLeft < 7 ? Colors.orange : Colors.green);
+                final catData = appCategories.firstWhere((c) => c.id == product.category, orElse: () => appCategories[0]);
+                return SlideInAnimation(delay: index * 100, child: Card(color: isSelected ? Colors.green.shade100 : Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: isSelected ? const BorderSide(color: Colors.green, width: 2) : BorderSide.none), elevation: isSelected ? 0 : 4, margin: const EdgeInsets.only(bottom: 16), child: InkWell(onTap: () => _toggleSelection(product.id, product.name), onLongPress: () => _showProductDialog(productToEdit: product), borderRadius: BorderRadius.circular(20), child: Padding(padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0), child: ListTile(contentPadding: const EdgeInsets.symmetric(horizontal: 16), leading: isSelected ? const Icon(Icons.check_circle, color: Colors.green, size: 36) : Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: catData.color.withOpacity(0.15), shape: BoxShape.circle), child: Icon(catData.icon, color: catData.color, size: 32)), title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)), subtitle: Padding(padding: const EdgeInsets.only(top: 6.0), child: Row(children: [Icon(Icons.timer_outlined, size: 18, color: statusColor), const SizedBox(width: 6), Text("${AppText.get('days_left')} ${product.daysLeft}", style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 16))])), trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 28), onPressed: () => _confirmDeleteOrMove(product)))))));
+              });
+            })),
+      ]),
+      floatingActionButton: FloatingActionButton.extended(onPressed: _selectedProductIds.isNotEmpty ? _searchRecipes : () => _showProductDialog(), label: Text(_selectedProductIds.isNotEmpty ? AppText.get('cook_btn') : AppText.get('add_product'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)), icon: Icon(_selectedProductIds.isNotEmpty ? Icons.restaurant_menu : Icons.add, size: 28), backgroundColor: _selectedProductIds.isNotEmpty ? Colors.deepOrange : Colors.green.shade600, foregroundColor: Colors.white, elevation: 4),
     );
+  }
+
+  Widget _filterChip(String id, String label, IconData icon, Color color) {
+    final isSelected = _selectedCategoryFilter == id;
+    return Padding(padding: const EdgeInsets.only(right: 10), child: InkWell(onTap: () => setState(() => _selectedCategoryFilter = id), borderRadius: BorderRadius.circular(20), child: AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(color: isSelected ? color : Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: isSelected ? color : Colors.grey.shade300), boxShadow: isSelected ? [BoxShadow(color: color.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 3))] : []), child: Row(children: [Icon(icon, size: 18, color: isSelected ? Colors.white : Colors.grey), const SizedBox(width: 8), Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.black87, fontWeight: FontWeight.bold))]))));
   }
 }
 
