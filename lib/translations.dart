@@ -37,6 +37,14 @@ class AppText {
       'error': 'Помилка пошуку',
       'recipe_title': 'Можливі страви',
       'missed': 'Треба докупити:',
+      // СПИСОК ПОКУПОК
+      'shopping_list': 'Список покупок',
+      'add_item': 'Що треба купити?',
+      'delete_title': 'Продукт закінчився?',
+      'delete_msg': 'Додати його в список покупок перед видаленням?',
+      'yes_list': 'Так, у список',
+      'no_delete': 'Просто видалити',
+      'empty_list': 'Список покупок пустий 🎉',
     },
     'English': {
       'app_title': 'Smart Fridge',
@@ -71,6 +79,14 @@ class AppText {
       'error': 'Error searching',
       'recipe_title': 'Possible Dishes',
       'missed': 'Missing ingredients:',
+      // SHOPPING LIST
+      'shopping_list': 'Shopping List',
+      'add_item': 'What to buy?',
+      'delete_title': 'Product finished?',
+      'delete_msg': 'Add it to shopping list before deleting?',
+      'yes_list': 'Yes, to list',
+      'no_delete': 'Just delete',
+      'empty_list': 'Shopping list is empty 🎉',
     },
     'Español': {
       'app_title': 'Smart Fridge',
@@ -105,6 +121,14 @@ class AppText {
       'error': 'Error de búsqueda',
       'recipe_title': 'Platos posibles',
       'missed': 'Faltan ingredientes:',
+      // SHOPPING LIST
+      'shopping_list': 'Lista de compras',
+      'add_item': '¿Qué comprar?',
+      'delete_title': '¿Producto terminado?',
+      'delete_msg': '¿Añadir a la lista de compras antes de borrar?',
+      'yes_list': 'Sí, a la lista',
+      'no_delete': 'Solo borrar',
+      'empty_list': 'Lista vacía 🎉',
     },
     'Français': {
       'app_title': 'Smart Fridge',
@@ -139,6 +163,14 @@ class AppText {
       'error': 'Erreur de recherche',
       'recipe_title': 'Plats possibles',
       'missed': 'Ingrédients manquants :',
+      // SHOPPING LIST
+      'shopping_list': 'Liste de courses',
+      'add_item': 'Quoi acheter ?',
+      'delete_title': 'Produit fini ?',
+      'delete_msg': 'Ajouter à la liste avant de supprimer ?',
+      'yes_list': 'Oui, à la liste',
+      'no_delete': 'Juste supprimer',
+      'empty_list': 'Liste vide 🎉',
     },
   };
 

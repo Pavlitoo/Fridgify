@@ -12,21 +12,18 @@ import 'firebase_options.dart';
 import 'product_model.dart';
 import 'profile_screen.dart';
 import 'translations.dart';
-import 'notification_service.dart'; // ВАЖЛИВО: Файл нагадувань
+import 'notification_service.dart';
+// 👇 НОВИЙ ІМПОРТ
+import 'shopping_list_screen.dart';
 
-// Твій ключ Spoonacular
+// 👇 ВСТАВ КЛЮЧ
 const String spoonacularApiKey = '0699d942fb5e4acaa71980cc7207cef0';
 // ----------------------------------------
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-  // Ініціалізація сповіщень
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await NotificationService().init();
-
   runApp(const SmartFridgeApp());
 }
 
@@ -41,11 +38,7 @@ class SmartFridgeApp extends StatelessWidget {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Smart Fridge',
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.green, brightness: Brightness.light),
-            useMaterial3: true,
-            fontFamily: 'Roboto',
-          ),
+          theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.green, brightness: Brightness.light), useMaterial3: true, fontFamily: 'Roboto'),
           home: StreamBuilder<User?>(
             stream: FirebaseAuth.instance.authStateChanges(),
             builder: (context, snapshot) {
@@ -60,7 +53,7 @@ class SmartFridgeApp extends StatelessWidget {
   }
 }
 
-// --- ЕКРАН ВХОДУ ---
+// --- AUTH SCREEN (Без змін) ---
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
   @override
@@ -79,20 +72,10 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
       if (googleUser == null) { setState(() => isLoading = false); return; }
-
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
+      final credential = GoogleAuthProvider.credential(accessToken: googleAuth.accessToken, idToken: googleAuth.idToken);
       await FirebaseAuth.instance.signInWithCredential(credential);
-    } catch (e) {
-      if(mounted) _showError("Error: $e");
-    } finally {
-      if(mounted) setState(() => isLoading = false);
-    }
+    } catch (e) { if(mounted) _showError("Error: $e"); } finally { if (mounted) setState(() => isLoading = false); }
   }
 
   Future<void> signInWithGitHub() async {
@@ -100,7 +83,7 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       GithubAuthProvider githubProvider = GithubAuthProvider();
       await FirebaseAuth.instance.signInWithProvider(githubProvider);
-    } catch (e) { if(mounted) _showError("Error: $e"); } finally { if(mounted) setState(() => isLoading = false); }
+    } catch (e) { if (mounted) _showError("Error: $e"); } finally { if (mounted) setState(() => isLoading = false); }
   }
 
   Future<void> submitAuthForm() async {
@@ -112,7 +95,7 @@ class _AuthScreenState extends State<AuthScreen> {
         final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(email: emailController.text.trim(), password: passwordController.text.trim());
         if (nameController.text.isNotEmpty) { await userCredential.user!.updateDisplayName(nameController.text.trim()); }
       }
-    } on FirebaseAuthException catch (e) { if(mounted) _showError(e.message ?? "Error"); } finally { if(mounted) setState(() => isLoading = false); }
+    } on FirebaseAuthException catch (e) { if(mounted) _showError(e.message ?? "Error"); } finally { if (mounted) setState(() => isLoading = false); }
   }
 
   void _showError(String message) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.red)); }
@@ -160,7 +143,7 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
-// --- HOME SCREEN ---
+// --- HOME SCREEN (ОНОВЛЕНО) ---
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -169,8 +152,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  // 👇 ТЕПЕР ТУТ 3 ЕКРАНИ
   static const List<Widget> _pages = <Widget>[
     FridgeContent(),
+    ShoppingListScreen(), // 🆕 Список покупок
     ProfileScreen(),
   ];
 
@@ -185,6 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
         indicatorColor: Colors.green.shade200,
         destinations: <Widget>[
           NavigationDestination(selectedIcon: const Icon(Icons.kitchen), icon: const Icon(Icons.kitchen_outlined), label: AppText.get('my_fridge')),
+          NavigationDestination(selectedIcon: const Icon(Icons.shopping_cart), icon: const Icon(Icons.shopping_cart_outlined), label: AppText.get('shopping_list')), // 🆕
           NavigationDestination(selectedIcon: const Icon(Icons.person), icon: const Icon(Icons.person_outline), label: AppText.get('my_profile')),
         ],
       ),
@@ -192,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// --- FRIDGE CONTENT ---
+// --- FRIDGE CONTENT (ОНОВЛЕНО ЛОГІКУ ВИДАЛЕННЯ) ---
 class FridgeContent extends StatefulWidget {
   const FridgeContent({super.key});
   @override
@@ -225,7 +211,49 @@ class _FridgeContentState extends State<FridgeContent> {
     });
   }
 
-  // SPOONACULAR SEARCH
+  // 👇 НОВА ФУНКЦІЯ: ВИДАЛИТИ АБО ПЕРЕНЕСТИ
+  void _confirmDeleteOrMove(Product product) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppText.get('delete_title'), textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(AppText.get('delete_msg'), textAlign: TextAlign.center),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          // Просто видалити
+          TextButton(
+            onPressed: () {
+              NotificationService().cancelNotification(product.id.hashCode);
+              FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products').doc(product.id).delete();
+              Navigator.pop(ctx);
+            },
+            child: Text(AppText.get('no_delete'), style: const TextStyle(color: Colors.grey)),
+          ),
+          // Перенести в список
+          ElevatedButton.icon(
+            onPressed: () async {
+              // 1. Додаємо в список покупок
+              await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('shopping_list').add({
+                'name': product.name,
+                'isBought': false,
+                'addedDate': Timestamp.now(),
+              });
+              // 2. Видаляємо з холодильника
+              NotificationService().cancelNotification(product.id.hashCode);
+              FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products').doc(product.id).delete();
+
+              if(mounted) Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Перенесено в список покупок! 🛒"), backgroundColor: Colors.green));
+            },
+            icon: const Icon(Icons.shopping_cart),
+            label: Text(AppText.get('yes_list')),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _searchRecipes() async {
     final ingredients = _selectedProductNames.join(',');
     showDialog(context: context, barrierDismissible: false, builder: (ctx) => Center(child: Card(child: Padding(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children: [const CircularProgressIndicator(), const SizedBox(height: 20), Text(AppText.get('loading'))])))));
@@ -342,16 +370,13 @@ class _FridgeContentState extends State<FridgeContent> {
           ElevatedButton(onPressed: () async { if (nameController.text.isNotEmpty) {
             final expDate = DateTime.now().add(Duration(days: daysToExpire));
             final data = {'name': nameController.text.trim(), 'expirationDate': Timestamp.fromDate(expDate), 'category': selectedCategory};
-
             final collection = FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products');
             if (isEditing) {
               await collection.doc(productToEdit.id).update(data);
-              // Оновлюємо нагадування
               NotificationService().cancelNotification(productToEdit.id.hashCode);
               NotificationService().scheduleNotification(productToEdit.id.hashCode, nameController.text.trim(), expDate);
             } else {
               final docRef = await collection.add({...data, 'addedDate': Timestamp.now()});
-              // Створюємо нагадування
               NotificationService().scheduleNotification(docRef.id.hashCode, nameController.text.trim(), expDate);
             }
             Navigator.pop(context);
@@ -401,11 +426,8 @@ class _FridgeContentState extends State<FridgeContent> {
                             : Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: iconColor.withOpacity(0.15), shape: BoxShape.circle), child: Icon(iconData, color: iconColor, size: 32)),
                         title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
                         subtitle: Padding(padding: const EdgeInsets.only(top: 6.0), child: Row(children: [Icon(Icons.timer_outlined, size: 18, color: statusColor), const SizedBox(width: 6), Text("${AppText.get('days_left')} ${product.daysLeft}", style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 16))])),
-                        trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 28), onPressed: () {
-                          // Видаляємо нагадування при видаленні продукту
-                          NotificationService().cancelNotification(product.id.hashCode);
-                          FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products').doc(product.id).delete();
-                        }),
+                        // 👇 КНОПКА ВИДАЛЕННЯ ТЕПЕР ВИКЛИКАЄ ДІАЛОГ
+                        trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 28), onPressed: () => _confirmDeleteOrMove(product)),
                       ),
                     ),
                   ),
