@@ -27,5 +27,5 @@
 
 ### 1. Клонування репозиторію
 ```bash
-git clone [https://github.com/ВАШ_НІКНЕЙМ/smart_fridge.git](https://github.com/ВАШ_НІКНЕЙМ/smart_fridge.git)
+git clone [https://github.com/Pavlitoo/smart_fridge.git](https://github.com/Pavlitoo/smart_fridge.git)
 cd smart_fridge
