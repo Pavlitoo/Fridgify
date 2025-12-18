@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'translations.dart'; // IMPORTANT!
+import 'translations.dart';
+import 'stats_screen.dart'; // 🆕 IMPORT
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -91,6 +92,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, 5))]),
                   child: Column(
                     children: [
+                      // 📊 СТАТИСТИКА
+                      ListTile(
+                        leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.purple.shade50, shape: BoxShape.circle), child: Icon(Icons.pie_chart, color: Colors.purple.shade700)),
+                        title: Text(AppText.get('stats_title'), style: const TextStyle(fontWeight: FontWeight.w500)),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const StatsScreen())),
+                      ),
+                      Divider(height: 1, color: Colors.grey.shade100, indent: 60, endIndent: 20),
+
+                      // 🌐 МОВА
                       ListTile(
                         leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.blue.shade50, shape: BoxShape.circle), child: Icon(Icons.language, color: Colors.blue.shade700)),
                         title: Text(AppText.get('language'), style: const TextStyle(fontWeight: FontWeight.w500)),
@@ -99,6 +110,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onTap: () => _showLanguageDialog(),
                       ),
                       Divider(height: 1, color: Colors.grey.shade100, indent: 60, endIndent: 20),
+
+                      // 🔔 СПОВІЩЕННЯ
                       ListTile(
                         leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.orange.shade50, shape: BoxShape.circle), child: Icon(Icons.notifications_active, color: Colors.orange.shade700)),
                         title: Text(AppText.get('push_notif'), style: const TextStyle(fontWeight: FontWeight.w500)),

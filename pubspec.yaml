@@ -16,20 +16,23 @@ dependencies:
   cloud_firestore: ^4.15.8
   firebase_messaging: ^14.7.19
 
-  # Вхід
+  # Auth
   google_sign_in: ^6.2.1
 
-  # Інтерфейс
+  # UI
   cupertino_icons: ^1.0.6
   font_awesome_flutter: ^10.7.0
 
-  # Інтернет
+  # Internet
   http: ^1.2.0
   url_launcher: ^6.2.5
 
-  # 👇 НОВЕ: Нагадування та Час
+  # Notifications
   flutter_local_notifications: ^17.1.0
   timezone: ^0.9.2
+
+  # 👇 ДОДАНО ДЛЯ СТАТИСТИКИ
+  fl_chart: ^1.1.1
 
 dev_dependencies:
   flutter_test:

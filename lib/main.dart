@@ -14,20 +14,17 @@ import 'profile_screen.dart';
 import 'translations.dart';
 import 'notification_service.dart';
 import 'shopping_list_screen.dart';
+// 👇 НОВИЙ ІМПОРТ
+import 'stats_screen.dart';
 
-// 👇 YOUR SPOONACULAR KEY
+// 👇 ВСТАВ КЛЮЧ
 const String spoonacularApiKey = '0699d942fb5e4acaa71980cc7207cef0';
 // ----------------------------------------
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-  // Initialize notifications
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await NotificationService().init();
-
   runApp(const SmartFridgeApp());
 }
 
@@ -42,11 +39,7 @@ class SmartFridgeApp extends StatelessWidget {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Smart Fridge',
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.green, brightness: Brightness.light),
-            useMaterial3: true,
-            fontFamily: 'Roboto',
-          ),
+          theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.green, brightness: Brightness.light), useMaterial3: true, fontFamily: 'Roboto'),
           home: StreamBuilder<User?>(
             stream: FirebaseAuth.instance.authStateChanges(),
             builder: (context, snapshot) {
@@ -61,7 +54,7 @@ class SmartFridgeApp extends StatelessWidget {
   }
 }
 
-// --- AUTH SCREEN ---
+// --- AUTH SCREEN (Без змін) ---
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
   @override
@@ -80,20 +73,10 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
       if (googleUser == null) { setState(() => isLoading = false); return; }
-
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
+      final credential = GoogleAuthProvider.credential(accessToken: googleAuth.accessToken, idToken: googleAuth.idToken);
       await FirebaseAuth.instance.signInWithCredential(credential);
-    } catch (e) {
-      if(mounted) _showError("Error: $e");
-    } finally {
-      if(mounted) setState(() => isLoading = false);
-    }
+    } catch (e) { if(mounted) _showError("Error: $e"); } finally { if (mounted) setState(() => isLoading = false); }
   }
 
   Future<void> signInWithGitHub() async {
@@ -101,7 +84,7 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       GithubAuthProvider githubProvider = GithubAuthProvider();
       await FirebaseAuth.instance.signInWithProvider(githubProvider);
-    } catch (e) { if(mounted) _showError("Error: $e"); } finally { if(mounted) setState(() => isLoading = false); }
+    } catch (e) { if (mounted) _showError("Error: $e"); } finally { if (mounted) setState(() => isLoading = false); }
   }
 
   Future<void> submitAuthForm() async {
@@ -113,7 +96,7 @@ class _AuthScreenState extends State<AuthScreen> {
         final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(email: emailController.text.trim(), password: passwordController.text.trim());
         if (nameController.text.isNotEmpty) { await userCredential.user!.updateDisplayName(nameController.text.trim()); }
       }
-    } on FirebaseAuthException catch (e) { if(mounted) _showError(e.message ?? "Error"); } finally { if(mounted) setState(() => isLoading = false); }
+    } on FirebaseAuthException catch (e) { if(mounted) _showError(e.message ?? "Error"); } finally { if (mounted) setState(() => isLoading = false); }
   }
 
   void _showError(String message) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.red)); }
@@ -195,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// --- FRIDGE CONTENT ---
+// --- FRIDGE CONTENT (ОНОВЛЕНО) ---
 class FridgeContent extends StatefulWidget {
   const FridgeContent({super.key});
   @override
@@ -228,7 +211,16 @@ class _FridgeContentState extends State<FridgeContent> {
     });
   }
 
-  // Confirm deletion or move to shopping list
+  // 📝 LOG HISTORY (Eaten/Wasted)
+  Future<void> _logHistory(String action, String productName) async {
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('history').add({
+      'action': action, // 'eaten' or 'wasted'
+      'product': productName,
+      'date': Timestamp.now(),
+    });
+  }
+
+  // 🗑️ DELETE CONFIRMATION DIALOG
   void _confirmDeleteOrMove(Product product) {
     showDialog(
       context: context,
@@ -236,42 +228,76 @@ class _FridgeContentState extends State<FridgeContent> {
         title: Text(AppText.get('delete_title'), textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
         content: Text(AppText.get('delete_msg'), textAlign: TextAlign.center),
         actionsAlignment: MainAxisAlignment.center,
+        // 👇 ОНОВЛЕНИЙ ВИГЛЯД КНОПОК
         actions: [
-          // Just delete
-          TextButton(
-            onPressed: () {
-              NotificationService().cancelNotification(product.id.hashCode);
-              FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products').doc(product.id).delete();
-              Navigator.pop(ctx);
-            },
-            child: Text(AppText.get('no_delete'), style: const TextStyle(color: Colors.grey)),
-          ),
-          // Move to list
-          ElevatedButton.icon(
-            onPressed: () async {
-              // 1. Add to shopping list
-              await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('shopping_list').add({
-                'name': product.name,
-                'isBought': false,
-                'addedDate': Timestamp.now(),
-              });
-              // 2. Delete from fridge
-              NotificationService().cancelNotification(product.id.hashCode);
-              FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products').doc(product.id).delete();
-
-              if(mounted) Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Moved to Shopping List! 🛒"), backgroundColor: Colors.green));
-            },
-            icon: const Icon(Icons.shopping_cart),
-            label: Text(AppText.get('yes_list')),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              // 😋 EATEN
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.sentiment_very_satisfied, color: Colors.green, size: 36),
+                    onPressed: () {
+                      _logHistory('eaten', product.name);
+                      _deleteProduct(product);
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${AppText.get('action_eaten')}! +1 🌿"), backgroundColor: Colors.green));
+                    },
+                  ),
+                  Text(AppText.get('action_eaten'), style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+              // 🗑️ WASTED
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.delete_forever, color: Colors.redAccent, size: 36),
+                    onPressed: () {
+                      _logHistory('wasted', product.name);
+                      _deleteProduct(product);
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${AppText.get('action_wasted')} 😞"), backgroundColor: Colors.redAccent));
+                    },
+                  ),
+                  Text(AppText.get('action_wasted'), style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+              // 🛒 TO LIST
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.add_shopping_cart, color: Colors.blue, size: 36),
+                    onPressed: () async {
+                      // Log as eaten (usually)
+                      _logHistory('eaten', product.name);
+                      // Add to shopping list
+                      await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('shopping_list').add({
+                        'name': product.name, 'isBought': false, 'addedDate': Timestamp.now(),
+                      });
+                      _deleteProduct(product);
+                      if(mounted) Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Moved to List! 🛒"), backgroundColor: Colors.blue));
+                    },
+                  ),
+                  Text("List", style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+            ],
+          )
         ],
       ),
     );
   }
 
-  // SPOONACULAR SEARCH
+  void _deleteProduct(Product product) {
+    NotificationService().cancelNotification(product.id.hashCode);
+    FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products').doc(product.id).delete();
+  }
+
   Future<void> _searchRecipes() async {
     final ingredients = _selectedProductNames.join(',');
     showDialog(context: context, barrierDismissible: false, builder: (ctx) => Center(child: Card(child: Padding(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children: [const CircularProgressIndicator(), const SizedBox(height: 20), Text(AppText.get('loading'))])))));
@@ -392,12 +418,10 @@ class _FridgeContentState extends State<FridgeContent> {
             final collection = FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products');
             if (isEditing) {
               await collection.doc(productToEdit.id).update(data);
-              // Update notification
               NotificationService().cancelNotification(productToEdit.id.hashCode);
               NotificationService().scheduleNotification(productToEdit.id.hashCode, nameController.text.trim(), expDate);
             } else {
               final docRef = await collection.add({...data, 'addedDate': Timestamp.now()});
-              // Schedule notification
               NotificationService().scheduleNotification(docRef.id.hashCode, nameController.text.trim(), expDate);
             }
             Navigator.pop(context);
@@ -447,6 +471,7 @@ class _FridgeContentState extends State<FridgeContent> {
                             : Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: iconColor.withOpacity(0.15), shape: BoxShape.circle), child: Icon(iconData, color: iconColor, size: 32)),
                         title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
                         subtitle: Padding(padding: const EdgeInsets.only(top: 6.0), child: Row(children: [Icon(Icons.timer_outlined, size: 18, color: statusColor), const SizedBox(width: 6), Text("${AppText.get('days_left')} ${product.daysLeft}", style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 16))])),
+                        // 👇 КНОПКА ВИДАЛЕННЯ ТЕПЕР ВИКЛИКАЄ ДІАЛОГ
                         trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 28), onPressed: () => _confirmDeleteOrMove(product)),
                       ),
                     ),
@@ -469,7 +494,7 @@ class _FridgeContentState extends State<FridgeContent> {
   }
 }
 
-// Animation Widget
+// Анімація
 class SlideInAnimation extends StatefulWidget {
   final Widget child;
   final int delay;
