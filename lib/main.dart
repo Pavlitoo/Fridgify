@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // 🆕 IMPORT
 
 import 'firebase_options.dart';
 import 'product_model.dart';
@@ -13,9 +13,7 @@ import 'profile_screen.dart';
 import 'translations.dart';
 import 'notification_service.dart';
 import 'shopping_list_screen.dart';
-import 'stats_screen.dart';
-// 👇 НОВИЙ СЕРВІС
-import 'ai_service.dart';
+import 'ai_service.dart'; // 🆕 IMPORT
 
 // ----------------------------------------
 
@@ -43,6 +41,10 @@ final List<CategoryData> appCategories = [
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 👇 Load environment variables (API Keys)
+  await dotenv.load(fileName: ".env");
+
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await NotificationService().init();
   runApp(const SmartFridgeApp());
@@ -78,7 +80,7 @@ class SmartFridgeApp extends StatelessWidget {
   }
 }
 
-// --- AUTH SCREEN (Без змін) ---
+// --- AUTH SCREEN ---
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
   @override
@@ -283,11 +285,10 @@ class _FridgeContentState extends State<FridgeContent> {
     FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products').doc(product.id).delete();
   }
 
-  // 👇 НОВА ФУНКЦІЯ: AI CHEF
+  // 👇 SEARCH RECIPES VIA AI
   Future<void> _searchRecipes() async {
     final ingredients = _selectedProductNames.join(', ');
 
-    // Показуємо діалог завантаження
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -302,7 +303,7 @@ class _FridgeContentState extends State<FridgeContent> {
                 const SizedBox(height: 20),
                 Text(AppText.get('loading'), style: const TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                const Text("AI Chef думає... 👨‍🍳", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                const Text("AI Chef працює... 👨‍🍳", style: TextStyle(fontSize: 12, color: Colors.grey)),
               ],
             ),
           ),
@@ -318,30 +319,29 @@ class _FridgeContentState extends State<FridgeContent> {
       final bool isGluten = settings['is_gluten_free'] ?? false;
       final bool isQuick = settings['is_quick'] ?? false;
 
-      // Формуємо рядок дієти
       String diet = "";
       if (isVeg) diet += "vegetarian, ";
       if (isGluten) diet += "gluten free, ";
       if (isQuick) diet += "quick meal";
 
-      // 🧠 ВИКЛИК AI
+      // CALL AI SERVICE
       final recipes = await AiRecipeService().getRecipes(
         ingredients: _selectedProductNames,
         userLanguage: languageNotifier.value,
         diet: diet,
       );
 
-      Navigator.pop(context); // Закриваємо лоадер
+      Navigator.pop(context);
 
       if (recipes.isNotEmpty) {
         _showResults(recipes);
         setState(() { _selectedProductIds.clear(); _selectedProductNames.clear(); });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("AI не зміг придумати рецепт спробуйте ще раз 🤔"), backgroundColor: Colors.orange));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("AI не зміг придумати рецепт, спробуйте ще раз 🤔"), backgroundColor: Colors.orange));
       }
     } catch (e) {
       if(mounted && Navigator.canPop(context)) Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("AI Error: $e"), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
     }
   }
 
@@ -374,7 +374,6 @@ class _FridgeContentState extends State<FridgeContent> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // 🍲 EMOJI + TITLE
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -387,7 +386,6 @@ class _FridgeContentState extends State<FridgeContent> {
                             Text(recipe['description'] ?? '', style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
                             const Divider(height: 20),
 
-                            // 📋 MISSING INGREDIENTS
                             if (missingList.isNotEmpty) ...[
                               Text("${AppText.get('missed')} (${missingList.length})", style: const TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 4),
@@ -395,7 +393,6 @@ class _FridgeContentState extends State<FridgeContent> {
                               const SizedBox(height: 10),
                             ],
 
-                            // 📝 INSTRUCTIONS
                             ExpansionTile(
                               title: const Text("Інструкція", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
                               children: [

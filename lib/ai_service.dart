@@ -1,13 +1,15 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AiRecipeService {
   // 👇 Твій ключ OpenRouter
-  static const String apiKey = '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';
+  static String get apiKey => dotenv.env['OPENROUTER_KEY'] ?? '';
 
-  // ЗАЛИШИЛИ ТІЛЬКИ РОБОЧІ ТА ШВИДКІ МОДЕЛІ
+  // 🚀 ТІЛЬКИ ШВИДКІ ТА РОБОЧІ МОДЕЛІ
+  // Ми прибрали Google, який видавав помилки, щоб не гаяти час.
   final List<String> _models = [
-    "mistralai/mistral-7b-instruct:free",   // Твоя перевірена "робоча конячка"
+    "mistralai/mistral-7b-instruct:free",   // Твоя перевірена "робоча конячка" 🐎
     "meta-llama/llama-3-8b-instruct:free",  // Дуже швидкий резерв
   ];
 
@@ -17,15 +19,19 @@ class AiRecipeService {
     required String diet,
   }) async {
 
+    if (apiKey.isEmpty) {
+      throw "API Key not found in .env file!";
+    }
+
     final uri = Uri.parse('https://openrouter.ai/api/v1/chat/completions');
 
-    // 👇 ЗМІНЕНО: Create 5 recipes
+    // 👇 ТУТ ТЕПЕР 5 РЕЦЕПТІВ (Create 5 recipes)
     final prompt = '''
       You are a professional chef.
       
       INPUT DATA:
       - Ingredients: ${ingredients.join(', ')}
-      - Diet: $diet
+      - Diet preferences: $diet
       - TARGET LANGUAGE: $userLanguage
 
       TASK:
@@ -33,13 +39,13 @@ class AiRecipeService {
       
       CRITICAL RULES:
       1. RETURN ONLY A VALID JSON ARRAY. No markdown, no intro text.
-      2. TRANSLATE EVERYTHING TO $userLanguage.
+      2. TRANSLATE EVERYTHING TO $userLanguage. Title, description, instructions - ALL in $userLanguage.
       
       JSON FORMAT:
       [
         {
           "title": "Name ($userLanguage)",
-          "description": "Short yummy description ($userLanguage)",
+          "description": "Short tasty description ($userLanguage)",
           "missingIngredients": ["Ing1", "Ing2"],
           "instructions": "Step 1... Step 2... ($userLanguage)",
           "emoji": "🍲" 
@@ -80,7 +86,7 @@ class AiRecipeService {
 
           String content = data['choices'][0]['message']['content'];
 
-          // 🧹 ЧИСТКА JSON
+          // 🧹 ЧИСТКА JSON (Знаходимо квадратні дужки)
           int startIndex = content.indexOf('[');
           int endIndex = content.lastIndexOf(']');
 
