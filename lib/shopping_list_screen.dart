@@ -14,7 +14,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   final user = FirebaseAuth.instance.currentUser!;
   final TextEditingController _controller = TextEditingController();
 
-  // Додати товар
+  // Add Item
   Future<void> _addItem(String name) async {
     if (name.isEmpty) return;
     await FirebaseFirestore.instance
@@ -29,7 +29,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     _controller.clear();
   }
 
-  // Змінити статус (Куплено/Не куплено)
+  // Toggle bought status
   Future<void> _toggleBought(String id, bool currentValue) async {
     await FirebaseFirestore.instance
         .collection('users')
@@ -39,7 +39,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         .update({'isBought': !currentValue});
   }
 
-  // Видалити товар
+  // Delete item
   Future<void> _deleteItem(String id) async {
     await FirebaseFirestore.instance
         .collection('users')
@@ -60,7 +60,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       ),
       body: Column(
         children: [
-          // Поле вводу
+          // Input field
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Row(
@@ -88,7 +88,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             ),
           ),
 
-          // Список
+          // List
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance

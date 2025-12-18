@@ -13,17 +13,21 @@ import 'product_model.dart';
 import 'profile_screen.dart';
 import 'translations.dart';
 import 'notification_service.dart';
-// 👇 НОВИЙ ІМПОРТ
 import 'shopping_list_screen.dart';
 
-// 👇 ВСТАВ КЛЮЧ
+// 👇 YOUR SPOONACULAR KEY
 const String spoonacularApiKey = '0699d942fb5e4acaa71980cc7207cef0';
 // ----------------------------------------
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Initialize notifications
   await NotificationService().init();
+
   runApp(const SmartFridgeApp());
 }
 
@@ -38,7 +42,11 @@ class SmartFridgeApp extends StatelessWidget {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Smart Fridge',
-          theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.green, brightness: Brightness.light), useMaterial3: true, fontFamily: 'Roboto'),
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.green, brightness: Brightness.light),
+            useMaterial3: true,
+            fontFamily: 'Roboto',
+          ),
           home: StreamBuilder<User?>(
             stream: FirebaseAuth.instance.authStateChanges(),
             builder: (context, snapshot) {
@@ -53,7 +61,7 @@ class SmartFridgeApp extends StatelessWidget {
   }
 }
 
-// --- AUTH SCREEN (Без змін) ---
+// --- AUTH SCREEN ---
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
   @override
@@ -72,10 +80,20 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
       if (googleUser == null) { setState(() => isLoading = false); return; }
+
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(accessToken: googleAuth.accessToken, idToken: googleAuth.idToken);
+
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
       await FirebaseAuth.instance.signInWithCredential(credential);
-    } catch (e) { if(mounted) _showError("Error: $e"); } finally { if (mounted) setState(() => isLoading = false); }
+    } catch (e) {
+      if(mounted) _showError("Error: $e");
+    } finally {
+      if(mounted) setState(() => isLoading = false);
+    }
   }
 
   Future<void> signInWithGitHub() async {
@@ -83,7 +101,7 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       GithubAuthProvider githubProvider = GithubAuthProvider();
       await FirebaseAuth.instance.signInWithProvider(githubProvider);
-    } catch (e) { if (mounted) _showError("Error: $e"); } finally { if (mounted) setState(() => isLoading = false); }
+    } catch (e) { if(mounted) _showError("Error: $e"); } finally { if(mounted) setState(() => isLoading = false); }
   }
 
   Future<void> submitAuthForm() async {
@@ -95,7 +113,7 @@ class _AuthScreenState extends State<AuthScreen> {
         final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(email: emailController.text.trim(), password: passwordController.text.trim());
         if (nameController.text.isNotEmpty) { await userCredential.user!.updateDisplayName(nameController.text.trim()); }
       }
-    } on FirebaseAuthException catch (e) { if(mounted) _showError(e.message ?? "Error"); } finally { if (mounted) setState(() => isLoading = false); }
+    } on FirebaseAuthException catch (e) { if(mounted) _showError(e.message ?? "Error"); } finally { if(mounted) setState(() => isLoading = false); }
   }
 
   void _showError(String message) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.red)); }
@@ -143,7 +161,7 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
-// --- HOME SCREEN (ОНОВЛЕНО) ---
+// --- HOME SCREEN ---
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -152,10 +170,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
-  // 👇 ТЕПЕР ТУТ 3 ЕКРАНИ
   static const List<Widget> _pages = <Widget>[
     FridgeContent(),
-    ShoppingListScreen(), // 🆕 Список покупок
+    ShoppingListScreen(),
     ProfileScreen(),
   ];
 
@@ -170,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
         indicatorColor: Colors.green.shade200,
         destinations: <Widget>[
           NavigationDestination(selectedIcon: const Icon(Icons.kitchen), icon: const Icon(Icons.kitchen_outlined), label: AppText.get('my_fridge')),
-          NavigationDestination(selectedIcon: const Icon(Icons.shopping_cart), icon: const Icon(Icons.shopping_cart_outlined), label: AppText.get('shopping_list')), // 🆕
+          NavigationDestination(selectedIcon: const Icon(Icons.shopping_cart), icon: const Icon(Icons.shopping_cart_outlined), label: AppText.get('shopping_list')),
           NavigationDestination(selectedIcon: const Icon(Icons.person), icon: const Icon(Icons.person_outline), label: AppText.get('my_profile')),
         ],
       ),
@@ -178,7 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// --- FRIDGE CONTENT (ОНОВЛЕНО ЛОГІКУ ВИДАЛЕННЯ) ---
+// --- FRIDGE CONTENT ---
 class FridgeContent extends StatefulWidget {
   const FridgeContent({super.key});
   @override
@@ -211,7 +228,7 @@ class _FridgeContentState extends State<FridgeContent> {
     });
   }
 
-  // 👇 НОВА ФУНКЦІЯ: ВИДАЛИТИ АБО ПЕРЕНЕСТИ
+  // Confirm deletion or move to shopping list
   void _confirmDeleteOrMove(Product product) {
     showDialog(
       context: context,
@@ -220,7 +237,7 @@ class _FridgeContentState extends State<FridgeContent> {
         content: Text(AppText.get('delete_msg'), textAlign: TextAlign.center),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
-          // Просто видалити
+          // Just delete
           TextButton(
             onPressed: () {
               NotificationService().cancelNotification(product.id.hashCode);
@@ -229,21 +246,21 @@ class _FridgeContentState extends State<FridgeContent> {
             },
             child: Text(AppText.get('no_delete'), style: const TextStyle(color: Colors.grey)),
           ),
-          // Перенести в список
+          // Move to list
           ElevatedButton.icon(
             onPressed: () async {
-              // 1. Додаємо в список покупок
+              // 1. Add to shopping list
               await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('shopping_list').add({
                 'name': product.name,
                 'isBought': false,
                 'addedDate': Timestamp.now(),
               });
-              // 2. Видаляємо з холодильника
+              // 2. Delete from fridge
               NotificationService().cancelNotification(product.id.hashCode);
               FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products').doc(product.id).delete();
 
               if(mounted) Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Перенесено в список покупок! 🛒"), backgroundColor: Colors.green));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Moved to Shopping List! 🛒"), backgroundColor: Colors.green));
             },
             icon: const Icon(Icons.shopping_cart),
             label: Text(AppText.get('yes_list')),
@@ -254,6 +271,7 @@ class _FridgeContentState extends State<FridgeContent> {
     );
   }
 
+  // SPOONACULAR SEARCH
   Future<void> _searchRecipes() async {
     final ingredients = _selectedProductNames.join(',');
     showDialog(context: context, barrierDismissible: false, builder: (ctx) => Center(child: Card(child: Padding(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children: [const CircularProgressIndicator(), const SizedBox(height: 20), Text(AppText.get('loading'))])))));
@@ -288,7 +306,7 @@ class _FridgeContentState extends State<FridgeContent> {
               const Divider(),
               Expanded(
                 child: recipes.isEmpty
-                    ? const Center(child: Text("Нічого не знайдено 😔"))
+                    ? const Center(child: Text("Nothing found 😔"))
                     : ListView.builder(
                   controller: controller,
                   itemCount: recipes.length,
@@ -309,7 +327,7 @@ class _FridgeContentState extends State<FridgeContent> {
                           final title = recipe['title'].toString().replaceAll(' ', '-');
                           final url = Uri.parse("https://spoonacular.com/recipes/$title-$id");
                           if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Не вдалося відкрити посилання")));
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Could not open link")));
                           }
                         },
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -321,9 +339,9 @@ class _FridgeContentState extends State<FridgeContent> {
                               Text("${AppText.get('missed')} ($missedCount)", style: const TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold, fontSize: 14)),
                               const SizedBox(height: 4),
                               Text(missedString, style: TextStyle(color: Colors.grey[700], fontSize: 14))
-                            ] else const Text("Всі продукти є! ✅", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                            ] else const Text("You have everything! ✅", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 15),
-                            SizedBox(width: double.infinity, child: ElevatedButton.icon(icon: const Icon(Icons.menu_book, color: Colors.white), label: const Text("Читати рецепт", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: () async {
+                            SizedBox(width: double.infinity, child: ElevatedButton.icon(icon: const Icon(Icons.menu_book, color: Colors.white), label: const Text("Read Recipe", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: () async {
                               final id = recipe['id']; final title = recipe['title'].toString().replaceAll(' ', '-'); final url = Uri.parse("https://spoonacular.com/recipes/$title-$id"); await launchUrl(url, mode: LaunchMode.externalApplication);
                             })),
                           ])),
@@ -353,7 +371,7 @@ class _FridgeContentState extends State<FridgeContent> {
         content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
           TextField(controller: nameController, style: const TextStyle(fontSize: 18), decoration: InputDecoration(labelText: AppText.get('product_name'), prefixIcon: const Icon(Icons.edit, color: Colors.green), filled: true, fillColor: Colors.grey.shade50, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)), autofocus: true),
           const SizedBox(height: 24),
-          const Text("Категорія:", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          const Text("Category:", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           Wrap(alignment: WrapAlignment.center, spacing: 12, runSpacing: 10, children: _categoryIcons.entries.map((entry) {
             final isSelected = selectedCategory == entry.key;
@@ -361,7 +379,7 @@ class _FridgeContentState extends State<FridgeContent> {
           }).toList()),
           const SizedBox(height: 30),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(AppText.get('days_valid'), style: const TextStyle(fontSize: 16, color: Colors.grey)),
-            Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)), child: Text("$daysToExpire днів", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 18)))]),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)), child: Text("$daysToExpire days", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 18)))]),
           const SizedBox(height: 10),
           SliderTheme(data: SliderTheme.of(context).copyWith(activeTrackColor: Colors.green, inactiveTrackColor: Colors.green.shade100, trackShape: const RoundedRectSliderTrackShape(), trackHeight: 12.0, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 15.0), thumbColor: Colors.white, overlayColor: Colors.green.withAlpha(32), overlayShape: const RoundSliderOverlayShape(overlayRadius: 28.0), tickMarkShape: const RoundSliderTickMarkShape(), activeTickMarkColor: Colors.green.shade200, inactiveTickMarkColor: Colors.green.shade100, valueIndicatorShape: const PaddleSliderValueIndicatorShape(), valueIndicatorColor: Colors.green, valueIndicatorTextStyle: const TextStyle(color: Colors.white)), child: Slider(value: daysToExpire.toDouble(), min: 1, max: 30, divisions: 29, label: "$daysToExpire", onChanged: (val) => setDialogState(() => daysToExpire = val.toInt()))),
         ]))),
@@ -370,13 +388,16 @@ class _FridgeContentState extends State<FridgeContent> {
           ElevatedButton(onPressed: () async { if (nameController.text.isNotEmpty) {
             final expDate = DateTime.now().add(Duration(days: daysToExpire));
             final data = {'name': nameController.text.trim(), 'expirationDate': Timestamp.fromDate(expDate), 'category': selectedCategory};
+
             final collection = FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products');
             if (isEditing) {
               await collection.doc(productToEdit.id).update(data);
+              // Update notification
               NotificationService().cancelNotification(productToEdit.id.hashCode);
               NotificationService().scheduleNotification(productToEdit.id.hashCode, nameController.text.trim(), expDate);
             } else {
               final docRef = await collection.add({...data, 'addedDate': Timestamp.now()});
+              // Schedule notification
               NotificationService().scheduleNotification(docRef.id.hashCode, nameController.text.trim(), expDate);
             }
             Navigator.pop(context);
@@ -426,7 +447,6 @@ class _FridgeContentState extends State<FridgeContent> {
                             : Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: iconColor.withOpacity(0.15), shape: BoxShape.circle), child: Icon(iconData, color: iconColor, size: 32)),
                         title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
                         subtitle: Padding(padding: const EdgeInsets.only(top: 6.0), child: Row(children: [Icon(Icons.timer_outlined, size: 18, color: statusColor), const SizedBox(width: 6), Text("${AppText.get('days_left')} ${product.daysLeft}", style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 16))])),
-                        // 👇 КНОПКА ВИДАЛЕННЯ ТЕПЕР ВИКЛИКАЄ ДІАЛОГ
                         trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 28), onPressed: () => _confirmDeleteOrMove(product)),
                       ),
                     ),
@@ -449,7 +469,7 @@ class _FridgeContentState extends State<FridgeContent> {
   }
 }
 
-// Анімація
+// Animation Widget
 class SlideInAnimation extends StatefulWidget {
   final Widget child;
   final int delay;

@@ -3,18 +3,18 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 
 class NotificationService {
-  // Робимо так, щоб цей сервіс був один на весь додаток (Singleton)
+  // Singleton pattern to access the service globally
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
-  // Ініціалізація (запускається при старті додатку)
+  // Initialization (runs on app start)
   Future<void> init() async {
-    tz.initializeTimeZones(); // Налаштування часових поясів
+    tz.initializeTimeZones(); // Initialize time zones
 
-    // Налаштування для Android (використовуємо стандартну іконку)
+    // Android settings (using default app icon)
     const AndroidInitializationSettings initializationSettingsAndroid =
     AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -24,21 +24,21 @@ class NotificationService {
 
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
-    // Просимо дозвіл на сповіщення (для Android 13+)
+    // Request permission for Android 13+
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
   }
 
-  // Функція: Запланувати нагадування
+  // Function: Schedule a notification
   Future<void> scheduleNotification(int id, String productName, DateTime expirationDate) async {
-    // Нагадуємо за 1 день до закінчення терміну
+    // Notify 1 day before expiration
     final scheduledDate = expirationDate.subtract(const Duration(days: 1));
 
-    // Якщо дата вже пройшла — не ставимо нагадування
+    // If date has passed, don't schedule
     if (scheduledDate.isBefore(DateTime.now())) return;
 
-    // Ставимо час на 9:00 ранку
+    // Set time to 9:00 AM
     final notificationTime = DateTime(
         scheduledDate.year,
         scheduledDate.month,
@@ -48,24 +48,24 @@ class NotificationService {
 
     await flutterLocalNotificationsPlugin.zonedSchedule(
       id,
-      '⚠️ Продукт псується!',
-      'Термін придатності "$productName" спливає завтра. Час використати!',
+      '⚠️ Product expiring!',
+      'Expiration date for "$productName" is tomorrow. Use it soon!',
       tz.TZDateTime.from(notificationTime, tz.local),
       const NotificationDetails(
         android: AndroidNotificationDetails(
-          'expiry_channel', // ID каналу
-          'Нагадування про продукти', // Назва каналу
-          channelDescription: 'Сповіщає, коли продукти псуються',
+          'expiry_channel', // Channel ID
+          'Product Expiry Reminders', // Channel Name
+          channelDescription: 'Notifies when products are about to expire',
           importance: Importance.max,
           priority: Priority.high,
         ),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle, // Точний час навіть у сплячому режимі
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle, // Exact timing even in doze mode
       uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
 
-  // Функція: Скасувати нагадування (коли видаляєш продукт)
+  // Function: Cancel notification (when deleting product)
   Future<void> cancelNotification(int id) async {
     await flutterLocalNotificationsPlugin.cancel(id);
   }

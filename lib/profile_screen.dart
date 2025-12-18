@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'translations.dart'; // ВАЖЛИВО!
+import 'translations.dart'; // IMPORTANT!
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -48,10 +48,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       NotificationSettings settings = await FirebaseMessaging.instance.requestPermission();
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
         _updateSettings('push_enabled', true);
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Сповіщення увімкнено!"), backgroundColor: Colors.green));
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Notifications enabled!"), backgroundColor: Colors.green));
       } else {
         setState(() => _notificationsEnabled = false);
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Немає дозволу в налаштуваннях"), backgroundColor: Colors.red));
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Permission denied in settings"), backgroundColor: Colors.red));
       }
     } else {
       _updateSettings('push_enabled', false);
