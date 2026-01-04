@@ -46,3 +46,7 @@ app.*.map.json
 
 
 .env/
+
+# Secrets
+lib/secrets.dart
+android/app/src/main/res/values/secrets.xml
