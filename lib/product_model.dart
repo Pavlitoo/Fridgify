@@ -5,7 +5,10 @@ class Product {
   final String name;
   final DateTime expirationDate;
   final DateTime addedDate;
-  final String category; // 🆕 Added category (icon name)
+  final String category;
+  // 🆕 НОВІ ПОЛЯ
+  final double quantity;
+  final String unit;
 
   Product({
     required this.id,
@@ -13,9 +16,10 @@ class Product {
     required this.expirationDate,
     required this.addedDate,
     required this.category,
+    this.quantity = 1.0, // Дефолт
+    this.unit = 'pcs',   // Дефолт
   });
 
-  // Convert Firestore data to Product object
   factory Product.fromFirestore(DocumentSnapshot doc) {
     Map data = doc.data() as Map<String, dynamic>;
     return Product(
@@ -23,23 +27,16 @@ class Product {
       name: data['name'] ?? '',
       expirationDate: (data['expirationDate'] as Timestamp).toDate(),
       addedDate: (data['addedDate'] as Timestamp).toDate(),
-      category: data['category'] ?? 'other', // Default to 'other' if no category
+      category: data['category'] ?? 'other',
+      // Читаємо нові поля, якщо їх немає - беремо дефолт
+      quantity: (data['quantity'] ?? 1.0).toDouble(),
+      unit: data['unit'] ?? 'pcs',
     );
   }
 
-  // Convert Product object to Firestore data
-  Map<String, dynamic> toMap() {
-    return {
-      'name': name,
-      'expirationDate': expirationDate,
-      'addedDate': addedDate,
-      'category': category,
-    };
-  }
-
-  // Calculate days left
   int get daysLeft {
     final now = DateTime.now();
+    // Скидаємо час до опівночі, щоб рахувати тільки дні
     final today = DateTime(now.year, now.month, now.day);
     final exp = DateTime(expirationDate.year, expirationDate.month, expirationDate.day);
     return exp.difference(today).inDays;

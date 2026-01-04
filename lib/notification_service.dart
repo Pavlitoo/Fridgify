@@ -1,71 +1,105 @@
+import 'dart:io';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+import 'package:flutter/material.dart';
 
 class NotificationService {
-  // Singleton pattern to access the service globally
+  // Singleton pattern
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+  FlutterLocalNotificationsPlugin();
 
-  // Initialization (runs on app start)
   Future<void> init() async {
-    tz.initializeTimeZones(); // Initialize time zones
+    tz.initializeTimeZones();
 
-    // Android settings (using default app icon)
     const AndroidInitializationSettings initializationSettingsAndroid =
     AndroidInitializationSettings('@mipmap/ic_launcher');
 
+    const DarwinInitializationSettings initializationSettingsDarwin =
+    DarwinInitializationSettings(
+      requestSoundPermission: true,
+      requestBadgePermission: true,
+      requestAlertPermission: true,
+    );
+
     const InitializationSettings initializationSettings = InitializationSettings(
       android: initializationSettingsAndroid,
+      iOS: initializationSettingsDarwin,
     );
 
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-
-    // Request permission for Android 13+
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
   }
 
-  // Function: Schedule a notification
+  // 👇 Повертає true/false (дозволено чи ні)
+  Future<bool> requestPermission() async {
+    if (Platform.isAndroid) {
+      final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
+      flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+
+      final bool? granted = await androidImplementation?.requestNotificationsPermission();
+      return granted ?? false;
+    } else if (Platform.isIOS) {
+      final IOSFlutterLocalNotificationsPlugin? iosImplementation =
+      flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
+
+      final bool? granted = await iosImplementation?.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      return granted ?? false;
+    }
+    return false;
+  }
+
   Future<void> scheduleNotification(int id, String productName, DateTime expirationDate) async {
-    // Notify 1 day before expiration
-    final scheduledDate = expirationDate.subtract(const Duration(days: 1));
+    try {
+      DateTime reminderDate = expirationDate.subtract(const Duration(days: 3));
+      DateTime scheduledTime = DateTime(
+        reminderDate.year,
+        reminderDate.month,
+        reminderDate.day,
+        9, 0,
+      );
 
-    // If date has passed, don't schedule
-    if (scheduledDate.isBefore(DateTime.now())) return;
+      if (scheduledTime.isBefore(DateTime.now())) {
+        scheduledTime = DateTime.now().add(const Duration(hours: 1));
+        if (expirationDate.isBefore(DateTime.now())) return;
+      }
 
-    // Set time to 9:00 AM
-    final notificationTime = DateTime(
-        scheduledDate.year,
-        scheduledDate.month,
-        scheduledDate.day,
-        9, 0, 0
-    );
-
-    await flutterLocalNotificationsPlugin.zonedSchedule(
-      id,
-      '⚠️ Product expiring!',
-      'Expiration date for "$productName" is tomorrow. Use it soon!',
-      tz.TZDateTime.from(notificationTime, tz.local),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'expiry_channel', // Channel ID
-          'Product Expiry Reminders', // Channel Name
-          channelDescription: 'Notifies when products are about to expire',
-          importance: Importance.max,
-          priority: Priority.high,
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        id,
+        '⚠️ Перевір холодильник!',
+        'Термін придатності "$productName" спливає скоро!',
+        tz.TZDateTime.from(scheduledTime, tz.local),
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'expiry_channel',
+            'Термін придатності',
+            channelDescription: 'Нагадування про закінчення терміну продуктів',
+            importance: Importance.max,
+            priority: Priority.high,
+            color: Colors.green,
+            icon: '@mipmap/ic_launcher',
+          ),
+          iOS: DarwinNotificationDetails(),
         ),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle, // Exact timing even in doze mode
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-    );
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+        UILocalNotificationDateInterpretation.absoluteTime,
+      );
+      print("✅ Нагадування створено для $productName");
+    } catch (e) {
+      print("❌ Помилка планування: $e");
+    }
   }
 
-  // Function: Cancel notification (when deleting product)
   Future<void> cancelNotification(int id) async {
     await flutterLocalNotificationsPlugin.cancel(id);
   }

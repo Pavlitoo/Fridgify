@@ -22,46 +22,61 @@ dependencies:
   # UI
   cupertino_icons: ^1.0.6
   font_awesome_flutter: ^10.7.0
-  fl_chart: ^0.66.0 # Графіки
+  fl_chart: ^0.66.0
 
   # Internet
-  http: ^1.2.0
-  url_launcher: ^6.2.5
+  http: ^1.6.0
+  url_launcher: ^6.3.2
+  internet_connection_checker: ^1.0.0+1
 
-  # Notifications
-  flutter_local_notifications: ^17.1.0
+  # Utils
+  flutter_local_notifications: ^18.0.1
   timezone: ^0.9.2
-  google_generative_ai: ^0.4.7
   flutter_dotenv: ^6.0.0
+  image_picker: ^1.0.7
+  flutter_image_compress: ^2.3.0
+  geolocator: ^11.0.0
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
+  share_plus: ^10.0.0
+  app_links: ^7.0.0
+  firebase_storage: ^11.7.7
+  record: ^6.0.0
+  audioplayers: ^6.5.1
+  path_provider: ^2.1.5
+  permission_handler: ^12.0.1
+  purchases_flutter: ^8.11.0
+  shared_preferences: ^2.5.4
+  google_mobile_ads: ^7.0.0
+  flutter_sound: ^9.28.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
 
-  # 👇 ГЕНЕРАТОРИ ІКОНОК ТА ЗАСТАВКИ
+  # Генератори
   flutter_launcher_icons: ^0.13.1
   flutter_native_splash: ^2.3.10
 
 flutter:
   uses-material-design: true
-
-  # 👇 ВАЖЛИВО: ВІДКРИВАЄМО ДОСТУП ДО КАРТИНКИ
   assets:
     - assets/logo.png
     - .env
 
-# --- НАЛАШТУВАННЯ ІКОНКИ ---
-flutter_icons:
-  android: "launcher_icon"
+# 👇 ОСЬ ТУТ БУЛА ПОМИЛКА. МАЄ БУТИ flutter_launcher_icons:
+flutter_launcher_icons:
+  android: "ic_launcher"
   ios: true
-  image_path: "assets/logo.png" # Шлях до твого лого
+  image_path: "assets/logo.png"
   min_sdk_android: 21
 
-# --- НАЛАШТУВАННЯ ЗАСТАВКИ (SPLASH) ---
+# Заставка
 flutter_native_splash:
-  color: "#4CAF50" # Зелений колір фону (як у твоєму додатку)
-  image: "assets/logo.png" # Логотип по центру
+  color: "#e8f5e9"
+  image: "assets/logo.png"
   android_12:
-    color: "#4CAF50"
+    color: "#e8f5e9"
     image: "assets/logo.png"
