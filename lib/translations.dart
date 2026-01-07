@@ -43,6 +43,19 @@ class AppText {
       'faq_q3': 'Як перенести продукт у список?', 'faq_a3': 'Натисніть три крапки біля продукта -> "У список".',
       'faq_q4': 'Де зберігаються дані?', 'faq_a4': 'Усі дані надійно захищені в хмарі Google Firebase.',
       'faq_q5': 'Що таке Premium?', 'faq_a5': 'Безлімітний пошук рецептів, відсутність реклами та підтримка розробки.',
+
+      'trash_title': 'Смітник',
+      'trash_sub': 'Зіпсовані та видалені продукти',
+      'trash_empty': 'Смітник порожній! 🌿',
+      'status_deleted': 'Видалено вами',
+      'status_rotten': 'Зіпсовано',
+      'ago_suffix': 'дн. тому',
+      'btn_buy': 'Купити знову',
+      'btn_restore': 'Відновити',
+      'btn_delete_forever': 'Видалити назавжди',
+      'msg_deleted_forever': 'Видалено назавжди',
+      'msg_restored': 'Продукт відновлено',
+      'msg_change_date': 'Оновіть дату придатності!',
     },
 
     // 🇺🇸 ENGLISH
@@ -75,6 +88,19 @@ class AppText {
       'faq_q3': 'How to move to list?', 'faq_a3': 'Tap three dots -> "To List".',
       'faq_q4': 'Where is data stored?', 'faq_a4': 'Securely on Google Firebase.',
       'faq_q5': 'What is Premium?', 'faq_a5': 'Full access without ads.',
+
+      'trash_title': 'Trash Bin',
+      'trash_sub': 'Expired and deleted items',
+      'trash_empty': 'Trash is empty! 🌿',
+      'status_deleted': 'Deleted by you',
+      'status_rotten': 'Expired',
+      'ago_suffix': 'days ago',
+      'btn_buy': 'Buy again',
+      'btn_restore': 'Restore',
+      'btn_delete_forever': 'Delete forever',
+      'msg_deleted_forever': 'Deleted forever',
+      'msg_restored': 'Product restored',
+      'msg_change_date': 'Update expiration date!',
     },
 
     // 🇪🇸 ESPAÑOL (ДОДАНО ПЕРЕКЛАДИ ТУТ)
@@ -107,6 +133,18 @@ class AppText {
       'faq_q3': '¿Cómo crear familia?', 'faq_a3': 'Perfil -> Mi Familia -> Crear.',
       'faq_q4': '¿Cómo eliminar producto?', 'faq_a4': 'Toca los tres puntos -> Eliminar.',
       'faq_q5': '¿Qué es Premium?', 'faq_a5': 'Acceso total sin anuncios.',
+
+      'trash_title': 'Papelera',
+      'trash_sub': 'Productos caducados y eliminados',
+      'trash_empty': '¡La papelera está vacía! 🌿',
+      'status_deleted': 'Eliminado por ti',
+      'status_rotten': 'Caducado',
+      'ago_suffix': 'días atrás',
+      'btn_buy': 'Comprar de nuevo',
+      'btn_restore': 'Restaurar',
+      'btn_delete_forever': 'Eliminar para siempre',
+      'msg_deleted_forever': 'Eliminado para siempre',
+      'msg_change_date': '¡Actualiza la fecha de caducidad!',
     },
 
     // 🇫🇷 FRANÇAIS (ДОДАНО ПЕРЕКЛАДИ ТУТ)
@@ -139,6 +177,18 @@ class AppText {
       'faq_q3': 'Comment créer une famille?', 'faq_a3': 'Profil -> Ma Famille -> Créer.',
       'faq_q4': 'Comment supprimer un produit?', 'faq_a4': 'Appuyez sur les trois points -> Supprimer.',
       'faq_q5': 'C\'est quoi Premium?', 'faq_a5': 'Accès complet sans publicité.',
+
+      'trash_title': 'Corbeille',
+      'trash_sub': 'Produits périmés et supprimés',
+      'trash_empty': 'La corbeille est vide ! 🌿',
+      'status_deleted': 'Supprimé par vous',
+      'status_rotten': 'Périmé',
+      'ago_suffix': 'jours',
+      'btn_buy': 'Racheter',
+      'btn_restore': 'Restaurer',
+      'btn_delete_forever': 'Supprimer définitivement',
+      'msg_deleted_forever': 'Supprimé définitivement',
+      'msg_change_date': 'Mettez à jour la date d\'expiration !',
     },
 
     // 🇩🇪 DEUTSCH (ДОДАНО ПЕРЕКЛАДИ ТУТ)
@@ -171,6 +221,18 @@ class AppText {
       'faq_q3': 'Wie erstelle ich eine Familie?', 'faq_a3': 'Profil -> Meine Familie -> Erstellen.',
       'faq_q4': 'Wie lösche ich ein Produkt?', 'faq_a4': 'Drei Punkte drücken -> Löschen.',
       'faq_q5': 'Was ist Premium?', 'faq_a5': 'Voller Zugriff ohne Werbung.',
+
+      'trash_title': 'Papierkorb',
+      'trash_sub': 'Abgelaufene und gelöschte Produkte',
+      'trash_empty': 'Der Papierkorb ist leer! 🌿',
+      'status_deleted': 'Von dir gelöscht',
+      'status_rotten': 'Abgelaufen',
+      'ago_suffix': 'Tage her',
+      'btn_buy': 'Nachkaufen',
+      'btn_restore': 'Wiederherstellen',
+      'btn_delete_forever': 'Endgültig löschen',
+      'msg_deleted_forever': 'Endgültig gelöscht',
+      'msg_change_date': 'Haltbarkeitsdatum aktualisieren!',
     },
   };
 }
