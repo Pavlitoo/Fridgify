@@ -1,43 +1,36 @@
 class Recipe {
   final String title;
   final String description;
+  final String imageUrl;
   final String time;
   final String kcal;
-  final List<String> ingredients;
+  final List<String> ingredients;        // Ті, що є в холодильнику
+  final List<String> missingIngredients; // ✅ Ті, що треба докупити
   final List<String> steps;
-  final String imageUrl;
 
   Recipe({
     required this.title,
     required this.description,
+    required this.imageUrl,
     required this.time,
     required this.kcal,
     required this.ingredients,
+    required this.missingIngredients, // ✅ Додано в конструктор
     required this.steps,
-    required this.imageUrl,
   });
 
   factory Recipe.fromJson(Map<String, dynamic> json) {
-    // 👇 Беремо повний опис для фото (наприклад "Cream soup with pomelo and coconut")
-    String query = json['img_key'] ?? json['title_en'] ?? 'delicious food';
-
-    // Чистимо, але залишаємо пробіли
-    query = query.replaceAll(RegExp(r'[^a-zA-Z\s]'), '');
-    if (query.isEmpty) query = "meal";
-
-    // Кодуємо для URL
-    String encodedQuery = Uri.encodeComponent(query);
-    int seed = query.hashCode;
-
     return Recipe(
-      title: json['title'] ?? 'Страва',
-      description: json['desc'] ?? '',
+      title: json['title'] ?? 'Без назви',
+      description: json['description'] ?? '',
+      // URL тепер приходить готовим з AI сервісу, тому тут просто беремо рядок
+      imageUrl: json['imageUrl'] ?? 'https://via.placeholder.com/300?text=No+Image',
       time: json['time'] ?? '30 хв',
       kcal: json['kcal'] ?? '-',
-      ingredients: List<String>.from(json['ing'] ?? []),
+      ingredients: List<String>.from(json['ingredients'] ?? []),
+      // ✅ Читаємо список відсутніх продуктів з JSON
+      missingIngredients: List<String>.from(json['missingIngredients'] ?? []),
       steps: List<String>.from(json['steps'] ?? []),
-      // 👇 Посилання тепер генерує точнішу картинку
-      imageUrl: "https://image.pollinations.ai/prompt/delicious $encodedQuery food photography?width=512&height=512&model=flux&seed=$seed",
     );
   }
 }

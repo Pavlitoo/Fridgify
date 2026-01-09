@@ -186,26 +186,22 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) { /* error */ }
   }
 
-  // 👇 СУПЕР РОЗУМНА АВАТАРКА З КЕШЕМ
   Widget _buildSmartAvatar(Map<String, dynamic> data) {
     String senderId = data['senderId'];
     String? localAvatar = data['senderAvatar'];
 
-    // 1. Перевіряємо кеш
     if (_imageCache.containsKey(senderId)) {
       return CircleAvatar(backgroundImage: MemoryImage(_imageCache[senderId]!), radius: 18);
     }
 
-    // 2. Якщо є в повідомленні - декодуємо, зберігаємо в кеш і показуємо
     if (localAvatar != null && localAvatar.isNotEmpty) {
       try {
         Uint8List bytes = base64Decode(localAvatar);
-        _imageCache[senderId] = bytes; // Зберігаємо в кеш
+        _imageCache[senderId] = bytes;
         return CircleAvatar(backgroundImage: MemoryImage(bytes), radius: 18);
       } catch (e) { /* ignore error */ }
     }
 
-    // 3. Якщо нічого немає - вантажимо з бази (і теж кешуємо)
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance.collection('users').doc(senderId).get(),
       builder: (context, snapshot) {
@@ -216,7 +212,7 @@ class _ChatScreenState extends State<ChatScreen> {
           if (liveAvatar != null && liveAvatar.isNotEmpty) {
             try {
               Uint8List bytes = base64Decode(liveAvatar);
-              _imageCache[senderId] = bytes; // Кешуємо
+              _imageCache[senderId] = bytes;
               return CircleAvatar(backgroundImage: MemoryImage(bytes), radius: 18);
             } catch (e) { /* ignore */ }
           }
@@ -235,7 +231,8 @@ class _ChatScreenState extends State<ChatScreen> {
       appBar: AppBar(
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(widget.chatTitle ?? AppText.get('chat_title'), style: TextStyle(fontSize: 18, color: textColor)),
-          if (widget.isDirect) const Text("Особисті", style: TextStyle(fontSize: 12, color: Colors.grey)),
+          // 👇 ВИПРАВЛЕНО: ТЕПЕР ТУТ ПЕРЕКЛАД
+          if (widget.isDirect) Text(AppText.get('chat_personal'), style: const TextStyle(fontSize: 12, color: Colors.grey)),
         ]),
         backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         iconTheme: IconThemeData(color: textColor),
@@ -251,7 +248,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
                     final docs = snapshot.data!.docs;
-                    if (docs.isEmpty) return Center(child: Text("Немає повідомлень", style: TextStyle(color: Colors.grey.shade500)));
+
+                    // 👇 ВИПРАВЛЕНО: ТЕПЕР ТУТ ПЕРЕКЛАД
+                    if (docs.isEmpty) return Center(child: Text(AppText.get('chat_no_messages'), style: TextStyle(color: Colors.grey.shade500)));
 
                     return ListView.builder(
                       controller: _scrollController,
@@ -323,7 +322,6 @@ class _ChatScreenState extends State<ChatScreen> {
     if (data['imageBase64'] != null) {
       content = GestureDetector(
           onTap: () => showDialog(context: context, builder: (_) => Dialog(backgroundColor: Colors.transparent, child: InteractiveViewer(child: Image.memory(base64Decode(data['imageBase64']))))),
-          // 👇 GAPLESS ДЛЯ КАРТИНОК
           child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(base64Decode(data['imageBase64']), height: 200, fit: BoxFit.cover, gaplessPlayback: true))
       );
     }
@@ -357,7 +355,7 @@ class _ChatScreenState extends State<ChatScreen> {
             padding: const EdgeInsets.only(bottom: 4),
             child: Row(
               children: [
-                _buildSmartAvatar(data), // Аватарка (тепер не блимає)
+                _buildSmartAvatar(data),
                 const SizedBox(width: 8),
                 Text(data['senderName']??'', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade800, fontSize: 14)),
               ],

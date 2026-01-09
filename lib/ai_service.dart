@@ -1,41 +1,42 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/foundation.dart';
 import 'recipe_model.dart';
 
 class AiRecipeService {
-  // Використовуємо OpenRouter
   final String _baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
 
   Future<List<Recipe>> getRecipes({required List<String> ingredients, required String userLanguage}) async {
     String? apiKey = dotenv.env['OPENAI_API_KEY'];
+    if (apiKey == null || apiKey.isEmpty) throw Exception("API Key missing");
 
-    if (apiKey == null || apiKey.isEmpty) {
-      print("🔴 ПОМИЛКА: Ключ не знайдено в .env! Перевір файл.");
-      throw Exception("API Key missing");
-    }
-
+    // 👇 Просимо GPT дати нам точну назву для пошуку картинки
     final String prompt = '''
-    Ти професійний кухар. У мене є: ${ingredients.join(', ')}.
-    Мова користувача: $userLanguage.
-    Придумай 3 рецепти.
+    Ти шеф-кухар. У користувача є: ${ingredients.join(', ')}. Мова: $userLanguage.
     
-    ВАЖЛИВО: Відповідай ТІЛЬКИ чистим JSON. Не пиши ніякого вступу.
-    Формат JSON масиву:
+    Придумай 5 (п'ять) смачних рецептів.
+    
+    ВАЖЛИВО: 
+    1. Відповідай ТІЛЬКИ чистим JSON масивом.
+    2. "searchQuery" - це назва страви АНГЛІЙСЬКОЮ мовою для пошуку фото (наприклад: "Chicken Caesar Salad", "Borsch with sour cream"). Чим точніше, тим краще.
+    
+    JSON Структура:
     [
       {
         "title": "Назва страви",
-        "description": "Короткий опис",
+        "description": "Короткий смачний опис",
         "time": "30 хв",
         "kcal": "400 ккал",
-        "ingredients": ["інгредієнт 1", "інгредієнт 2"],
-        "steps": ["Крок 1", "Крок 2"],
-        "imageUrl": "https://source.unsplash.com/800x600/?food,dinner"
+        "searchQuery": "English Dish Name For Photo",
+        "ingredients": ["що є"],
+        "missingIngredients": ["що докупити"],
+        "steps": ["Крок 1", "Крок 2"]
       }
     ]
     ''';
 
-    print("🟡 Відправляю запит на OpenRouter...");
+    debugPrint("👨‍🍳 AI Chef: Генерую 5 рецептів...");
 
     try {
       final response = await http.post(
@@ -47,43 +48,47 @@ class AiRecipeService {
           'X-Title': 'Fridgify',
         },
         body: jsonEncode({
-          // Використовуємо безкоштовну модель Gemini через OpenRouter
-          "model": "google/gemini-2.0-flash-lite-preview-02-05:free",
+          "model": "openai/gpt-4o-mini",
           "messages": [
-            {"role": "system", "content": "You are a JSON generator. Output only valid JSON array."},
             {"role": "user", "content": prompt}
           ],
           "temperature": 0.7,
         }),
       );
 
-      print("🔵 Код відповіді: ${response.statusCode}");
-
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         String content = data['choices'][0]['message']['content'];
-
-        // Чистимо відповідь від можливих markdown тегів
         content = content.replaceAll('```json', '').replaceAll('```', '').trim();
-
         List<dynamic> jsonList = jsonDecode(content);
 
-        // 👇 ВИПРАВЛЕННЯ ТУТ: Ми прибрали поле 'id', бо його немає в твоїй моделі Recipe
-        return jsonList.map((json) => Recipe(
-          title: json['title'] ?? 'Без назви',
-          description: json['description'] ?? '',
-          imageUrl: json['imageUrl'] ?? 'https://via.placeholder.com/300?text=No+Image',
-          time: json['time'] ?? '30 хв',
-          kcal: json['kcal'] ?? 'Unknown',
-          ingredients: List<String>.from(json['ingredients'] ?? []),
-          steps: List<String>.from(json['steps'] ?? []),
-          // category: 'dinner', // Якщо в конструкторі немає category, закоментуй і цей рядок
-        )).toList();
+        debugPrint("✅ Рецепти готові. Підбираю фото...");
+
+        // Перетворюємо JSON у список рецептів
+        return jsonList.map((json) {
+          String query = json['searchQuery'] ?? 'delicious food';
+
+          // 🔥 МАГІЯ: Використовуємо Bing Image Proxy для миттєвого пошуку реального фото
+          // Це працює набагато стабільніше за генератори
+          String imageUrl = "https://tse2.mm.bing.net/th?q=${Uri.encodeComponent(query + ' food recipe high quality')}&w=800&h=600&c=7&rs=1&p=0";
+
+          return Recipe(
+            title: json['title'] ?? 'Без назви',
+            description: json['description'] ?? '',
+            imageUrl: imageUrl, // Ось наше надійне фото
+            time: json['time'] ?? '30 хв',
+            kcal: json['kcal'] ?? '-',
+            ingredients: List<String>.from(json['ingredients'] ?? []),
+            missingIngredients: List<String>.from(json['missingIngredients'] ?? []),
+            steps: List<String>.from(json['steps'] ?? []),
+          );
+        }).toList();
+
       } else {
-        throw Exception("Server Error: ${response.statusCode}");
+        throw Exception("AI Server Error: ${response.statusCode}");
       }
     } catch (e) {
-      print("🔴 CRITICAL ERROR: $e");
+      debugPrint("🔴 Error: $e");
       throw Exception("Failed to load recipes: $e");
     }
   }

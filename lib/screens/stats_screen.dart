@@ -5,7 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../translations.dart';
 import '../global.dart';
 
-class StatsScreen extends StatelessWidget {
+class StatsScreen extends StatelessWidget { // Клас StatsScreen
   const StatsScreen({super.key});
 
   @override
@@ -17,21 +17,27 @@ class StatsScreen extends StatelessWidget {
         valueListenable: languageNotifier,
         builder: (context, lang, child) {
           return Scaffold(
-            appBar: AppBar(title: Text(AppText.get('stats_title')), centerTitle: true, backgroundColor: isDark ? null : Colors.green.shade100),
+            appBar: AppBar(
+                title: Text(AppText.get('stats_title')),
+                centerTitle: true,
+                backgroundColor: isDark ? null : Colors.green.shade100
+            ),
             backgroundColor: isDark ? null : Colors.green.shade50,
             body: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('users').doc(user.uid).collection('history').snapshots(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                final docs = snapshot.data!.docs;
 
+                final docs = snapshot.data!.docs;
                 int eaten = 0;
                 int wasted = 0;
+
                 for (var doc in docs) {
                   final action = doc['action'];
                   if (action == 'eaten') eaten++;
                   else if (action == 'wasted') wasted++;
                 }
+
                 int total = eaten + wasted;
                 double efficiency = total == 0 ? 0 : (eaten / total) * 100;
 
@@ -39,6 +45,7 @@ class StatsScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(20.0),
                   child: Column(
                     children: [
+                      // Картка з загальною кількістю
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(24),
@@ -57,10 +64,17 @@ class StatsScreen extends StatelessWidget {
                           ],
                         ),
                       ),
+
                       const SizedBox(height: 20),
+
+                      // Кругова діаграма
                       Container(
                         padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
+                        decoration: BoxDecoration(
+                            color: Theme.of(context).cardColor,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]
+                        ),
                         child: Column(
                           children: [
                             Text(AppText.get('stat_efficiency'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.white : Colors.black)),
@@ -70,15 +84,34 @@ class StatsScreen extends StatelessWidget {
                               child: Stack(
                                 alignment: Alignment.center,
                                 children: [
-                                  PieChart(PieChartData(sectionsSpace: 0, centerSpaceRadius: 55, startDegreeOffset: -90, sections: [PieChartSectionData(value: eaten.toDouble(), color: const Color(0xFF4CAF50), radius: 18, showTitle: false), PieChartSectionData(value: wasted.toDouble(), color: const Color(0xFFEF5350), radius: 18, showTitle: false)])),
-                                  Column(mainAxisSize: MainAxisSize.min, children: [Text("${efficiency.toInt()}%", style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF4CAF50))), Text(AppText.get('stat_success'), style: const TextStyle(color: Colors.grey, fontSize: 10))]),
+                                  PieChart(
+                                      PieChartData(
+                                          sectionsSpace: 0,
+                                          centerSpaceRadius: 55,
+                                          startDegreeOffset: -90,
+                                          sections: [
+                                            PieChartSectionData(value: eaten.toDouble(), color: const Color(0xFF4CAF50), radius: 18, showTitle: false),
+                                            PieChartSectionData(value: wasted.toDouble(), color: const Color(0xFFEF5350), radius: 18, showTitle: false)
+                                          ]
+                                      )
+                                  ),
+                                  Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text("${efficiency.toInt()}%", style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF4CAF50))),
+                                        Text(AppText.get('stat_success'), style: const TextStyle(color: Colors.grey, fontSize: 10))
+                                      ]
+                                  ),
                                 ],
                               ),
                             ),
                           ],
                         ),
                       ),
+
                       const SizedBox(height: 20),
+
+                      // Маленькі картки
                       _buildSmallCard(AppText.get('stat_saved'), eaten, const Color(0xFF4CAF50), Icons.restaurant, context),
                       const SizedBox(height: 10),
                       _buildSmallCard(AppText.get('stat_wasted'), wasted, const Color(0xFFEF5350), Icons.delete_outline, context),
@@ -97,7 +130,19 @@ class StatsScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)]),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Row(children: [Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: color)), const SizedBox(width: 15), Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black))]), Text("$count", style: TextStyle(fontSize: 20, color: color, fontWeight: FontWeight.bold))]),
+      child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+                children: [
+                  Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: color)),
+                  const SizedBox(width: 15),
+                  Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black))
+                ]
+            ),
+            Text("$count", style: TextStyle(fontSize: 20, color: color, fontWeight: FontWeight.bold))
+          ]
+      ),
     );
   }
 }

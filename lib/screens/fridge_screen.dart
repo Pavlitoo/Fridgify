@@ -16,6 +16,7 @@ import '../premium_screen.dart';
 import '../ad_service.dart';
 import '../global.dart';
 
+// --- ДАНІ ДЛЯ КАТЕГОРІЙ ---
 class CategoryData {
   final String id;
   final IconData icon;
@@ -45,6 +46,7 @@ Locale getAppLocale(String langName) {
   }
 }
 
+// --- ГОЛОВНИЙ ЕКРАН ---
 class FridgeContent extends StatefulWidget {
   const FridgeContent({super.key});
 
@@ -58,26 +60,41 @@ class _FridgeContentState extends State<FridgeContent> {
   final List<String> _selectedProductNames = [];
   String _selectedCategoryFilter = 'all';
 
+  // Реклама
   BannerAd? _bannerAd;
-  bool _isAdLoaded = false;
+  bool _isBannerLoaded = false;
 
   @override
   void initState() {
     super.initState();
-    _loadBannerAd();
+    _initAds();
+  }
+
+  void _initAds() {
+    // Ініціалізація сервісу (відео)
+    AdService().init();
+
+    // Завантаження банера, якщо немає Premium
+    if (!SubscriptionService().isPremium) {
+      _loadBannerAd();
+    }
   }
 
   void _loadBannerAd() {
-    if (SubscriptionService().isPremium) return;
-    final ad = AdService().createBannerAd(
-      onLoaded: () {
-        if (mounted) setState(() => _isAdLoaded = true);
-      },
-    );
-    if (ad != null) {
-      setState(() => _bannerAd = ad);
-      _bannerAd!.load();
-    }
+    _bannerAd = BannerAd(
+      adUnitId: AdService().bannerAdUnitId,
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (_) {
+          if (mounted) setState(() => _isBannerLoaded = true);
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+          debugPrint('❌ Banner failed to load: $error');
+        },
+      ),
+    )..load();
   }
 
   @override
@@ -86,7 +103,7 @@ class _FridgeContentState extends State<FridgeContent> {
     super.dispose();
   }
 
-  // --- Firebase ---
+  // --- РОБОТА З FIREBASE ---
   CollectionReference _getProductsCollection(String? householdId) {
     return (householdId != null)
         ? FirebaseFirestore.instance.collection('households').doc(householdId).collection('products')
@@ -119,13 +136,11 @@ class _FridgeContentState extends State<FridgeContent> {
         .add({'action': action, 'product': productName, 'date': Timestamp.now()});
   }
 
-  // Фізичне видалення
   void _deleteProductForever(Product product, CollectionReference collection) {
     NotificationService().cancelNotification(product.id.hashCode);
     collection.doc(product.id).delete();
   }
 
-  // М'яке видалення
   void _moveToTrash(Product product, CollectionReference collection) {
     collection.doc(product.id).update({
       'category': 'trash'
@@ -133,10 +148,7 @@ class _FridgeContentState extends State<FridgeContent> {
     NotificationService().cancelNotification(product.id.hashCode);
   }
 
-  // ==========================================
-  // 🔥 ЛОГІКА СМІТНИКА
-  // ==========================================
-
+  // --- СМІТНИК ТА ВІДНОВЛЕННЯ ---
   Future<void> _moveFromTrashToShopList(Product product, CollectionReference fridgeCollection, CollectionReference listCollection) async {
     try {
       await listCollection.add({
@@ -185,22 +197,15 @@ class _FridgeContentState extends State<FridgeContent> {
     );
   }
 
-  // 👇 ОНОВЛЕНИЙ МЕТОД: Обробка відновлення
   void _handleRestore(Product product, CollectionReference collection) {
-    // 1. Якщо продукт ПРОСТРОЧЕНИЙ
     if (product.daysLeft <= 0) {
-      // Кажемо користувачу, що треба оновити дату
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppText.get('msg_change_date')), backgroundColor: Colors.orange)
       );
-      // Відкриваємо діалог редагування. Коли він збереже нову дату -> продукт стане "свіжим" і сам зникне зі смітника
       _showProductDialog(productToEdit: product, collection: collection);
-    }
-    // 2. Якщо продукт СВІЖИЙ (просто в категорії 'trash')
-    else {
-      // Миттєво відновлюємо
+    } else {
       collection.doc(product.id).update({'category': 'other'});
-      Navigator.pop(context); // Закриваємо смітник
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppText.get('msg_restored')), backgroundColor: Colors.green)
       );
@@ -217,7 +222,6 @@ class _FridgeContentState extends State<FridgeContent> {
         maxChildSize: 0.9,
         builder: (_, controller) {
           final isDark = Theme.of(context).brightness == Brightness.dark;
-          final cardColor = Theme.of(context).cardColor;
           final textColor = Theme.of(context).textTheme.bodyLarge?.color;
           final subTextColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600;
 
@@ -261,19 +265,13 @@ class _FridgeContentState extends State<FridgeContent> {
                           final product = trashProducts[i];
                           bool isManualDelete = product.category == 'trash';
 
-                          Color bg;
-                          Color iconColor;
-                          Color subtitleColor;
-
-                          if (isManualDelete) {
-                            bg = isDark ? Colors.grey.shade800 : Colors.grey.shade200;
-                            iconColor = isDark ? Colors.grey.shade400 : Colors.grey;
-                            subtitleColor = isDark ? Colors.grey.shade400 : Colors.grey;
-                          } else {
-                            bg = isDark ? Colors.red.withOpacity(0.15) : Colors.red.shade50.withOpacity(0.5);
-                            iconColor = Colors.red;
-                            subtitleColor = Colors.red;
-                          }
+                          Color bg = isManualDelete
+                              ? (isDark ? Colors.grey.shade800 : Colors.grey.shade200)
+                              : (isDark ? Colors.red.withOpacity(0.15) : Colors.red.shade50.withOpacity(0.5));
+                          Color iconColor = isManualDelete
+                              ? (isDark ? Colors.grey.shade400 : Colors.grey)
+                              : Colors.red;
+                          Color subtitleColor = iconColor;
 
                           return Card(
                             color: bg,
@@ -281,29 +279,20 @@ class _FridgeContentState extends State<FridgeContent> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: iconColor.withOpacity(0.3))),
                             margin: const EdgeInsets.only(bottom: 12),
                             child: ListTile(
-                              leading: Icon(
-                                  isManualDelete ? Icons.delete_outline : Icons.warning_amber_rounded,
-                                  color: iconColor
-                              ),
+                              leading: Icon(isManualDelete ? Icons.delete_outline : Icons.warning_amber_rounded, color: iconColor),
                               title: Text(product.name, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, decoration: TextDecoration.lineThrough)),
-
                               subtitle: Text(
                                   isManualDelete
                                       ? AppText.get('status_deleted')
                                       : "${AppText.get('status_rotten')} ${product.daysLeft.abs()} ${AppText.get('ago_suffix')}",
                                   style: TextStyle(color: subtitleColor)
                               ),
-
                               trailing: PopupMenuButton<String>(
                                 icon: const Icon(Icons.more_vert, color: Colors.grey),
                                 onSelected: (val) {
                                   if (val == 'shop') _moveFromTrashToShopList(product, collection, shopCollection);
                                   if (val == 'delete') _confirmDeleteFromTrash(product, collection);
-
-                                  // 👇 ТУТ ЗМІНИ: Викликаємо розумне відновлення
-                                  if (val == 'restore') {
-                                    _handleRestore(product, collection);
-                                  }
+                                  if (val == 'restore') _handleRestore(product, collection);
                                 },
                                 itemBuilder: (ctx) => [
                                   PopupMenuItem(value: 'shop', child: Row(children: [const Icon(Icons.refresh, color: Colors.orange), const SizedBox(width: 8), Text(AppText.get('btn_buy'), style: TextStyle(color: textColor))])),
@@ -326,10 +315,7 @@ class _FridgeContentState extends State<FridgeContent> {
     );
   }
 
-  // ==========================================
-  // ДІАЛОГИ ГОЛОВНОГО ЕКРАНУ
-  // ==========================================
-
+  // --- ДІАЛОГИ ---
   void _showConsumeDialog(Product product, CollectionReference collection) {
     final TextEditingController consumeController = TextEditingController();
     bool isPcs = product.unit == 'pcs';
@@ -352,12 +338,7 @@ class _FridgeContentState extends State<FridgeContent> {
               keyboardType: TextInputType.numberWithOptions(decimal: !isPcs),
               inputFormatters: isPcs ? [FilteringTextInputFormatter.digitsOnly] : [],
               style: TextStyle(color: textColor),
-              decoration: InputDecoration(
-                hintText: "???",
-                filled: true,
-                fillColor: inputFill,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              ),
+              decoration: InputDecoration(hintText: "???", filled: true, fillColor: inputFill, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)),
             ),
           ],
         ),
@@ -416,55 +397,81 @@ class _FridgeContentState extends State<FridgeContent> {
     );
   }
 
-  Future<void> _checkLimitAndSearch() async {
-    final subService = SubscriptionService();
-    if (subService.isPremium) {
-      _searchRecipes();
-      return;
-    }
-    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final userDocRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
-    final limitDoc = await userDocRef.collection('usage').doc('daily_limit').get();
+  void _showProductDialog({Product? productToEdit, required CollectionReference collection}) {
+    final nameController = TextEditingController(text: productToEdit?.name ?? '');
+    final qtyController = TextEditingController(text: productToEdit?.quantity.toString() ?? '1');
+    String selectedUnit = productToEdit?.unit ?? 'pcs';
+    DateTime selectedDate = productToEdit?.expirationDate ?? DateTime.now().add(const Duration(days: 7));
+    final isEditing = productToEdit != null;
 
-    int count = 0;
-    if (limitDoc.exists) {
-      final data = limitDoc.data()!;
-      if (data['date'] == todayStr) {
-        count = data['count'] ?? 0;
-      }
-    }
+    String selectedCategory = productToEdit?.category ?? 'other';
+    if (selectedCategory == 'trash') selectedCategory = 'other';
 
-    if (count >= 3) {
-      showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text("Premium 🔒"),
-            content: const Text("Limit reached."),
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(builder: (context, setDialogState) {
+          String formattedDate = "${selectedDate.day.toString().padLeft(2, '0')}/${selectedDate.month.toString().padLeft(2, '0')}/${selectedDate.year}";
+          final dialogBg = Theme.of(context).cardColor;
+          final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+          final inputFill = Theme.of(context).scaffoldBackgroundColor;
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            backgroundColor: dialogBg,
+            contentPadding: const EdgeInsets.all(24),
+            title: Text(isEditing ? AppText.get('edit_product') : AppText.get('add_product'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: textColor), textAlign: TextAlign.center),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(controller: nameController, style: TextStyle(fontSize: 18, color: textColor), decoration: InputDecoration(hintText: AppText.get('product_name'), hintStyle: const TextStyle(color: Colors.grey), prefixIcon: const Icon(Icons.edit, color: Colors.green), filled: true, fillColor: inputFill, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)), autofocus: true),
+                    const SizedBox(height: 16),
+                    Row(children: [
+                      Expanded(child: TextField(controller: qtyController, keyboardType: const TextInputType.numberWithOptions(decimal: true), style: TextStyle(color: textColor), decoration: InputDecoration(hintText: AppText.get('quantity'), hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: inputFill, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)))),
+                      const SizedBox(width: 12),
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 12), decoration: BoxDecoration(color: inputFill, borderRadius: BorderRadius.circular(16)), child: DropdownButtonHideUnderline(child: DropdownButton<String>(dropdownColor: dialogBg, value: selectedUnit, style: TextStyle(color: textColor), onChanged: (val) => setDialogState(() => selectedUnit = val!), items: ['pcs', 'kg', 'g', 'l', 'ml'].map((unit) { return DropdownMenuItem(value: unit, child: Text(AppText.get('u_$unit'), style: TextStyle(color: textColor))); }).toList())))
+                    ]),
+                    const SizedBox(height: 24),
+                    Text(AppText.get('category_label'), style: TextStyle(color: textColor?.withOpacity(0.7), fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 10, children: appCategories.map((cat) { final isSelected = selectedCategory == cat.id; return InkWell(onTap: () => setDialogState(() => selectedCategory = cat.id), child: Column(mainAxisSize: MainAxisSize.min, children: [AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: isSelected ? cat.color : inputFill, shape: BoxShape.circle, boxShadow: isSelected ? [BoxShadow(color: cat.color.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))] : []), child: Icon(cat.icon, color: isSelected ? Colors.white : Colors.grey, size: 28)), const SizedBox(height: 4), Text(AppText.get(cat.labelKey), style: TextStyle(fontSize: 10, color: isSelected ? cat.color : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal))])); }).toList()),
+                    const SizedBox(height: 30),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Text(AppText.get('days_valid'), style: TextStyle(fontSize: 16, color: textColor?.withOpacity(0.7))),
+                      InkWell(onTap: () async { final DateTime? picked = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365 * 10)), locale: getAppLocale(languageNotifier.value)); if (picked != null && picked != selectedDate) { setDialogState(() { selectedDate = picked; }); } }, child: Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), decoration: BoxDecoration(color: Colors.green.shade50.withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green)), child: Row(children: [const Icon(Icons.calendar_today, size: 18, color: Colors.green), const SizedBox(width: 8), Text(formattedDate, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16))]))),
+                    ])
+                  ],
+                ),
+              ),
+            ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK")),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
-                onPressed: () async {
-                  Navigator.pop(context);
-                  bool bought = await Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen())) ?? false;
-                  if (bought) _searchRecipes();
-                },
-                child: const Text("Premium"),
-              )
+              TextButton(onPressed: () => Navigator.pop(context), child: Text(AppText.get('cancel'), style: TextStyle(fontSize: 16, color: textColor))),
+              ElevatedButton(onPressed: () async { if (nameController.text.isNotEmpty) { final qty = double.tryParse(qtyController.text) ?? 1.0; final data = {'name': nameController.text.trim(), 'expirationDate': Timestamp.fromDate(selectedDate), 'category': selectedCategory, 'quantity': qty, 'unit': selectedUnit}; if (isEditing) { await collection.doc(productToEdit.id).update(data); NotificationService().cancelNotification(productToEdit.id.hashCode); NotificationService().scheduleNotification(productToEdit.id.hashCode, nameController.text.trim(), selectedDate); } else { final docRef = await collection.add({...data, 'addedDate': Timestamp.now()}); NotificationService().scheduleNotification(docRef.id.hashCode, nameController.text.trim(), selectedDate); } Navigator.pop(context); } }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: Text(isEditing ? AppText.get('save') : AppText.get('add'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))
             ],
-          ));
-    } else {
-      await userDocRef.collection('usage').doc('daily_limit').set({'date': todayStr, 'count': count + 1});
-      _searchRecipes();
-    }
+          );
+        });
+      },
+    );
   }
 
-  Future<void> _searchRecipes() async {
+  // --- ЛОГІКА РЕКЛАМИ І ПОШУКУ ---
+  Future<void> _checkLimitAndSearch() async {
     if (_selectedProductNames.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Select products!")));
       return;
     }
 
+    bool canContinue = await AdService().checkAndShowAd(context);
+
+    if (canContinue) {
+      _searchRecipes();
+    }
+  }
+
+  Future<void> _searchRecipes() async {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -562,9 +569,22 @@ class _FridgeContentState extends State<FridgeContent> {
                               child: Image.network(
                                 recipe.imageUrl,
                                 fit: BoxFit.cover,
+                                loadingBuilder: (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Center(child: CircularProgressIndicator(color: Colors.green));
+                                },
                                 errorBuilder: (context, error, stackTrace) => Container(
                                   color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-                                  child: const Center(child: Icon(Icons.broken_image, size: 50, color: Colors.grey)),
+                                  child: const Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.restaurant, size: 40, color: Colors.grey),
+                                        SizedBox(height: 5),
+                                        Text("No Image", style: TextStyle(color: Colors.grey)),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -595,24 +615,51 @@ class _FridgeContentState extends State<FridgeContent> {
                                     ],
                                   ),
                                   const SizedBox(height: 10),
+
+                                  Row(children: [
+                                    const Icon(Icons.access_time, size: 18, color: Colors.green),
+                                    const SizedBox(width: 6),
+                                    Text(recipe.time, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold))
+                                  ]),
+                                  const SizedBox(height: 12),
+
                                   Text(recipe.description, style: TextStyle(color: textColor?.withOpacity(0.7), fontSize: 15)),
                                   const Divider(height: 30),
-                                  Text("🛒 ${AppText.get('yes_list')}:", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+
+                                  Text(AppText.get('ingredients_title'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                                   const SizedBox(height: 10),
                                   Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
+                                    spacing: 8, runSpacing: 8,
                                     children: recipe.ingredients.map((ing) => Chip(
                                       label: Text(ing),
-                                      backgroundColor: isDark ? Colors.grey.shade800 : Colors.green.shade50,
-                                      labelStyle: TextStyle(color: isDark ? Colors.white : Colors.green.shade800),
+                                      backgroundColor: Colors.green.withOpacity(0.1),
+                                      labelStyle: TextStyle(color: Colors.green.shade800),
                                       side: BorderSide.none,
                                     )).toList(),
                                   ),
+
+                                  if (recipe.missingIngredients.isNotEmpty) ...[
+                                    const SizedBox(height: 20),
+                                    Text(AppText.get('missing_title'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.red)),
+                                    const SizedBox(height: 10),
+                                    Wrap(
+                                      spacing: 8, runSpacing: 8,
+                                      children: recipe.missingIngredients.map((ing) => Chip(
+                                        avatar: const Icon(Icons.add_shopping_cart, size: 16, color: Colors.red),
+                                        label: Text(ing),
+                                        backgroundColor: Colors.red.withOpacity(0.1),
+                                        labelStyle: TextStyle(color: Colors.red.shade800),
+                                        side: BorderSide.none,
+                                      )).toList(),
+                                    ),
+                                  ],
+
                                   const SizedBox(height: 20),
+
                                   ExpansionTile(
                                     tilePadding: EdgeInsets.zero,
-                                    title: Text("🍳 ${AppText.get('cook_btn')}?", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                                    initiallyExpanded: false,
+                                    title: Text(AppText.get('recipe_steps'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                                     children: recipe.steps.asMap().entries.map((entry) => Padding(
                                       padding: const EdgeInsets.only(bottom: 16.0),
                                       child: Row(
@@ -646,68 +693,7 @@ class _FridgeContentState extends State<FridgeContent> {
     );
   }
 
-  void _showProductDialog({Product? productToEdit, required CollectionReference collection}) {
-    final nameController = TextEditingController(text: productToEdit?.name ?? '');
-    final qtyController = TextEditingController(text: productToEdit?.quantity.toString() ?? '1');
-    String selectedUnit = productToEdit?.unit ?? 'pcs';
-    DateTime selectedDate = productToEdit?.expirationDate ?? DateTime.now().add(const Duration(days: 7));
-    final isEditing = productToEdit != null;
-
-    // 👇 ЦЕ КРИТИЧНО ВАЖЛИВО ДЛЯ ВІДНОВЛЕННЯ
-    // Якщо категорія 'trash' - ставимо дефолтну, щоб продукт "вийшов" зі смітника при збереженні
-    String selectedCategory = productToEdit?.category ?? 'other';
-    if (selectedCategory == 'trash') selectedCategory = 'other';
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(builder: (context, setDialogState) {
-          String formattedDate = "${selectedDate.day.toString().padLeft(2, '0')}/${selectedDate.month.toString().padLeft(2, '0')}/${selectedDate.year}";
-          final dialogBg = Theme.of(context).cardColor;
-          final textColor = Theme.of(context).textTheme.bodyLarge?.color;
-          final inputFill = Theme.of(context).scaffoldBackgroundColor;
-
-          return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            backgroundColor: dialogBg,
-            contentPadding: const EdgeInsets.all(24),
-            title: Text(isEditing ? AppText.get('edit_product') : AppText.get('add_product'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: textColor), textAlign: TextAlign.center),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(controller: nameController, style: TextStyle(fontSize: 18, color: textColor), decoration: InputDecoration(hintText: AppText.get('product_name'), hintStyle: const TextStyle(color: Colors.grey), prefixIcon: const Icon(Icons.edit, color: Colors.green), filled: true, fillColor: inputFill, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)), autofocus: true),
-                    const SizedBox(height: 16),
-                    Row(children: [
-                      Expanded(child: TextField(controller: qtyController, keyboardType: const TextInputType.numberWithOptions(decimal: true), style: TextStyle(color: textColor), decoration: InputDecoration(hintText: AppText.get('quantity'), hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: inputFill, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)))),
-                      const SizedBox(width: 12),
-                      Container(padding: const EdgeInsets.symmetric(horizontal: 12), decoration: BoxDecoration(color: inputFill, borderRadius: BorderRadius.circular(16)), child: DropdownButtonHideUnderline(child: DropdownButton<String>(dropdownColor: dialogBg, value: selectedUnit, style: TextStyle(color: textColor), onChanged: (val) => setDialogState(() => selectedUnit = val!), items: ['pcs', 'kg', 'g', 'l', 'ml'].map((unit) { return DropdownMenuItem(value: unit, child: Text(AppText.get('u_$unit'), style: TextStyle(color: textColor))); }).toList())))
-                    ]),
-                    const SizedBox(height: 24),
-                    Text(AppText.get('category_label'), style: TextStyle(color: textColor?.withOpacity(0.7), fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 10, children: appCategories.map((cat) { final isSelected = selectedCategory == cat.id; return InkWell(onTap: () => setDialogState(() => selectedCategory = cat.id), child: Column(mainAxisSize: MainAxisSize.min, children: [AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: isSelected ? cat.color : inputFill, shape: BoxShape.circle, boxShadow: isSelected ? [BoxShadow(color: cat.color.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))] : []), child: Icon(cat.icon, color: isSelected ? Colors.white : Colors.grey, size: 28)), const SizedBox(height: 4), Text(AppText.get(cat.labelKey), style: TextStyle(fontSize: 10, color: isSelected ? cat.color : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal))])); }).toList()),
-                    const SizedBox(height: 30),
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      Text(AppText.get('days_valid'), style: TextStyle(fontSize: 16, color: textColor?.withOpacity(0.7))),
-                      InkWell(onTap: () async { final DateTime? picked = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365 * 10)), locale: getAppLocale(languageNotifier.value)); if (picked != null && picked != selectedDate) { setDialogState(() { selectedDate = picked; }); } }, child: Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), decoration: BoxDecoration(color: Colors.green.shade50.withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green)), child: Row(children: [const Icon(Icons.calendar_today, size: 18, color: Colors.green), const SizedBox(width: 8), Text(formattedDate, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16))]))),
-                    ])
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: Text(AppText.get('cancel'), style: TextStyle(fontSize: 16, color: textColor))),
-              ElevatedButton(onPressed: () async { if (nameController.text.isNotEmpty) { final qty = double.tryParse(qtyController.text) ?? 1.0; final data = {'name': nameController.text.trim(), 'expirationDate': Timestamp.fromDate(selectedDate), 'category': selectedCategory, 'quantity': qty, 'unit': selectedUnit}; if (isEditing) { await collection.doc(productToEdit.id).update(data); NotificationService().cancelNotification(productToEdit.id.hashCode); NotificationService().scheduleNotification(productToEdit.id.hashCode, nameController.text.trim(), selectedDate); } else { final docRef = await collection.add({...data, 'addedDate': Timestamp.now()}); NotificationService().scheduleNotification(docRef.id.hashCode, nameController.text.trim(), selectedDate); } Navigator.pop(context); } }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: Text(isEditing ? AppText.get('save') : AppText.get('add'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))
-            ],
-          );
-        });
-      },
-    );
-  }
-
+  // --- ПОБУДОВА ІНТЕРФЕЙСУ (BUILD) ---
   @override
   Widget build(BuildContext context) {
     final textColor = Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
@@ -875,35 +861,11 @@ class _FridgeContentState extends State<FridgeContent> {
                                       }
                                     },
                                     itemBuilder: (context) => [
-                                      PopupMenuItem(
-                                          value: 'edit',
-                                          child: Row(children: [
-                                            const Icon(Icons.edit, color: Colors.blue),
-                                            const SizedBox(width: 10),
-                                            Text(AppText.get('edit_product'), style: TextStyle(color: textColor))
-                                          ])),
-                                      PopupMenuItem(
-                                          value: 'eaten',
-                                          child: Row(children: [
-                                            const Icon(Icons.restaurant, color: Colors.green),
-                                            const SizedBox(width: 10),
-                                            Text(AppText.get('action_eaten'), style: TextStyle(color: textColor))
-                                          ])),
-                                      PopupMenuItem(
-                                          value: 'shop',
-                                          child: Row(children: [
-                                            const Icon(Icons.shopping_cart, color: Colors.orange),
-                                            const SizedBox(width: 10),
-                                            Text(AppText.get('yes_list'), style: TextStyle(color: textColor))
-                                          ])),
+                                      PopupMenuItem(value: 'edit', child: Row(children: [const Icon(Icons.edit, color: Colors.blue), const SizedBox(width: 10), Text(AppText.get('edit_product'), style: TextStyle(color: textColor))])),
+                                      PopupMenuItem(value: 'eaten', child: Row(children: [const Icon(Icons.restaurant, color: Colors.green), const SizedBox(width: 10), Text(AppText.get('action_eaten'), style: TextStyle(color: textColor))])),
+                                      PopupMenuItem(value: 'shop', child: Row(children: [const Icon(Icons.shopping_cart, color: Colors.orange), const SizedBox(width: 10), Text(AppText.get('yes_list'), style: TextStyle(color: textColor))])),
                                       const PopupMenuDivider(),
-                                      PopupMenuItem(
-                                          value: 'delete',
-                                          child: Row(children: [
-                                            const Icon(Icons.delete_outline, color: Colors.red),
-                                            const SizedBox(width: 10),
-                                            Text(AppText.get('no_delete'), style: TextStyle(color: textColor))
-                                          ])),
+                                      PopupMenuItem(value: 'delete', child: Row(children: [const Icon(Icons.delete_outline, color: Colors.red), const SizedBox(width: 10), Text(AppText.get('no_delete'), style: TextStyle(color: textColor))])),
                                     ],
                                   ),
                                 ),
@@ -914,8 +876,15 @@ class _FridgeContentState extends State<FridgeContent> {
                       },
                     ),
                   ),
-                  if (_bannerAd != null && _isAdLoaded)
-                    Container(alignment: Alignment.center, width: _bannerAd!.size.width.toDouble(), height: _bannerAd!.size.height.toDouble(), child: AdWidget(ad: _bannerAd!)),
+
+                  // 👇 РЕКЛАМНИЙ БАНЕР ВНИЗУ СПИСКУ
+                  if (_bannerAd != null && _isBannerLoaded && !SubscriptionService().isPremium)
+                    Container(
+                        alignment: Alignment.center,
+                        width: _bannerAd!.size.width.toDouble(),
+                        height: _bannerAd!.size.height.toDouble(),
+                        child: AdWidget(ad: _bannerAd!)
+                    ),
                 ],
               ),
               floatingActionButton: _selectedProductIds.isNotEmpty
@@ -949,5 +918,31 @@ class _FridgeContentState extends State<FridgeContent> {
   }
 }
 
-class SlideInAnimation extends StatefulWidget { final Widget child; final int delay; const SlideInAnimation({super.key, required this.child, required this.delay}); @override State<SlideInAnimation> createState() => _SlideInAnimationState(); }
-class _SlideInAnimationState extends State<SlideInAnimation> with SingleTickerProviderStateMixin { late AnimationController _controller; late Animation<Offset> _offsetAnim; @override void initState() { super.initState(); _controller = AnimationController(duration: const Duration(milliseconds: 500), vsync: this); _offsetAnim = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut)); Future.delayed(Duration(milliseconds: widget.delay), () { if(mounted) _controller.forward(); }); } @override void dispose() { _controller.dispose(); super.dispose(); } @override Widget build(BuildContext context) { return FadeTransition(opacity: _controller, child: SlideTransition(position: _offsetAnim, child: widget.child)); } }
+// 👇 КЛАС АНІМАЦІЇ (ОКРЕМО, ВНИЗУ)
+class SlideInAnimation extends StatefulWidget {
+  final Widget child;
+  final int delay;
+  const SlideInAnimation({super.key, required this.child, required this.delay});
+  @override State<SlideInAnimation> createState() => _SlideInAnimationState();
+}
+
+class _SlideInAnimationState extends State<SlideInAnimation> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Offset> _offsetAnim;
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(duration: const Duration(milliseconds: 500), vsync: this);
+    _offsetAnim = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    Future.delayed(Duration(milliseconds: widget.delay), () { if(mounted) _controller.forward(); });
+  }
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(opacity: _controller, child: SlideTransition(position: _offsetAnim, child: widget.child));
+  }
+}
