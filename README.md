@@ -12,9 +12,9 @@
 
 ## 📱 Скріншоти
 
-| Головний екран | Список покупок | Рецепти від ШІ | Статистика |
-|:---:|:---:|:---:|:---:|
-| <img src="![home.jpg](screenshots/home.jpg)" width="200"/> | <img src="![shopping_list.png](screenshots/shopping_list.png)" width="200"/> | <img src="![family.png](screenshots/family.png)" width="200"/> | <img src="![stats.png](screenshots/stats.png)" width="200"/> |
+|                Головний екран                 |                                     Список покупок                                     |                 Рецепти від ШІ                  |                   Статистика                   |
+|:---------------------------------------------:|:--------------------------------------------------------------------------------------:|:-----------------------------------------------:|:----------------------------------------------:|
+| <img src="screenshots/home.jpg" width="200"/> | <img src="screenshots/shopping_list.png" width="200"/> | <img src="screenshots/family.png" width="200"/> | <img src="screenshots/stats.png" width="200"/> |
 
 ---
 
