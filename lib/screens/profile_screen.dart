@@ -7,16 +7,19 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../translations.dart' hide languageNotifier, themeNotifier;
 import 'stats_screen.dart';
 import 'faq_screen.dart';
-// import '../notification_service.dart';
 import 'family_screen.dart';
+import 'saved_recipes_screen.dart';
 import '../chat_service.dart';
 import '../subscription_service.dart';
 import '../premium_screen.dart';
 import '../global.dart';
+import '../utils/snackbar_utils.dart'; // ✅ Гарні повідомлення
+import '../error_handler.dart'; // ✅ Обробка помилок
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -55,13 +58,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if(mounted) setState(() => _isPremium = status);
   }
 
+  // 🔥 ВИПРАВЛЕНА ЛОГІКА: ЗАВЖДИ ВІДКРИВАЄМО ЕКРАН, А НЕ КЕРУВАННЯ
   Future<void> _handlePremiumButton() async {
-    if (_isPremium) {
-      await SubscriptionService().openManagementPage();
-    } else {
-      await Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen()));
-      _checkPremiumStatus();
-    }
+    // Незалежно від статусу, відкриваємо красивий екран
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen()));
+    // Після повернення оновлюємо статус (раптом купили)
+    _checkPremiumStatus();
   }
 
   Future<void> _loadSettingsAndProfile() async {
@@ -82,12 +84,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _householdId = data['householdId'];
               _unreadStream = ChatService().getUnreadCountStream(_householdId!);
             }
-            if (data.containsKey('settings')) {
-              final settings = data['settings'] as Map<String, dynamic>;
-              bool dbIsDark = settings['is_dark_mode'] ?? false;
-              themeNotifier.value = dbIsDark ? ThemeMode.dark : ThemeMode.light;
-              if (settings.containsKey('language')) languageNotifier.value = settings['language'];
-            }
             _isLoadingData = false;
           });
         }
@@ -96,6 +92,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (e) {
       if (mounted) setState(() => _isLoadingData = false);
+      SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
     }
   }
 
@@ -110,8 +107,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       String base64String = base64Encode(compressedBytes);
       setState(() => _avatarBase64 = base64String);
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({'avatar_base64': base64String}, SetOptions(merge: true));
+      SnackbarUtils.showSuccess(context, "Фото оновлено! 📸");
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Помилка завантаження фото'), backgroundColor: Colors.red));
+      SnackbarUtils.showError(context, 'Помилка завантаження фото');
     } finally {
       setState(() => _isLoadingImage = false);
     }
@@ -121,45 +119,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final newName = _nameController.text.trim();
     if (newName.isEmpty) return;
     setState(() { _displayName = newName; _isEditingName = false; });
-    await user.updateDisplayName(newName);
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({'displayName': newName}, SetOptions(merge: true));
+
+    try {
+      await user.updateDisplayName(newName);
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({'displayName': newName}, SetOptions(merge: true));
+      SnackbarUtils.showSuccess(context, "Ім'я змінено! ✅");
+    } catch (e) {
+      SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
+    }
   }
 
   void _updateSettings(String key, dynamic value) {
     FirebaseFirestore.instance.collection('users').doc(user.uid).set({'settings': { key: value }}, SetOptions(merge: true));
   }
 
-  void _toggleDarkMode(bool val) {
+  Future<void> _toggleDarkMode(bool val) async {
     themeNotifier.value = val ? ThemeMode.dark : ThemeMode.light;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_dark_mode', val);
     _updateSettings('is_dark_mode', val);
   }
 
   Future<void> _openMyLocation() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('GPS вимкнено. Увімкніть геолокацію.'), backgroundColor: Colors.orange));
-      return;
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
-    if (permission == LocationPermission.denied) return;
-
-    if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppText.get('searching_loc') ?? "Шукаю вашу локацію..."), backgroundColor: Colors.blue));
-
     try {
-      // 👇 ВИПРАВЛЕНИЙ РЯДОК: Використовуємо 'desiredAccuracy' замість 'locationSettings'
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if(mounted) SnackbarUtils.showWarning(context, 'GPS вимкнено. Увімкніть геолокацію.');
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+
+      if(mounted) SnackbarUtils.showSuccess(context, AppText.get('searching_loc') ?? "Шукаю вашу локацію...");
+
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-
       final url = Uri.parse("https://www.google.com/maps/search/?api=1&query=${position.latitude},${position.longitude}");
-
       if (await canLaunchUrl(url)) {
         await launchUrl(url, mode: LaunchMode.externalApplication);
       } else {
         throw 'Could not open maps';
       }
     } catch (e) {
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Помилка: $e'), backgroundColor: Colors.red));
+      if(mounted) SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
     }
   }
 
@@ -167,7 +170,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showModalBottomSheet(context: context, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))), builder: (ctx) => Container(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children: [Text(AppText.get('select_lang'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)), const SizedBox(height: 20), _langOpt("Українська", "🇺🇦"), _langOpt("English", "🇺🇸"), _langOpt("Español", "🇪🇸"), _langOpt("Français", "🇫🇷"), _langOpt("Deutsch", "🇩🇪")])));
   }
 
-  Widget _langOpt(String lang, String flag) { return ListTile(leading: Text(flag, style: const TextStyle(fontSize: 24)), title: Text(lang), onTap: () { languageNotifier.value = lang; _updateSettings('language', lang); Navigator.pop(context); }); }
+  Widget _langOpt(String lang, String flag) {
+    return ListTile(
+        leading: Text(flag, style: const TextStyle(fontSize: 24)),
+        title: Text(lang),
+        onTap: () async {
+          languageNotifier.value = lang;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('language', lang);
+          _updateSettings('language', lang);
+          Navigator.pop(context);
+        }
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -200,7 +215,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: _handlePremiumButton,
+                    onPressed: _handlePremiumButton, // 🔥 ТУТ ЗМІНЕНО
                     icon: Icon(_isPremium ? Icons.check_circle : Icons.star, color: Colors.white),
                     label: Text(
                         _isPremium ? AppText.get('prem_active') : AppText.get('prem_btn_buy'),
@@ -215,9 +230,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
 
+                // Кнопка локації
                 Container(margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), width: double.infinity, child: ElevatedButton.icon(onPressed: _openMyLocation, icon: const Icon(Icons.location_on, color: Colors.white), label: Text(AppText.get('map_btn') ?? "My Location", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), elevation: 4))),
 
                 Container(margin: const EdgeInsets.fromLTRB(16, 20, 16, 40), padding: const EdgeInsets.symmetric(vertical: 8), decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(24), border: Border.all(color: dividerColor.withOpacity(0.05)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 5))]), child: Column(children: [
+
+                  ListTile(
+                    contentPadding: tilePadding,
+                    leading: _buildIcon(Icons.favorite, Colors.red, bgColor: Colors.red.withOpacity(0.1)),
+                    title: Text(AppText.get('btn_saved_recipes'), style: _tileStyle(textColor)),
+                    trailing: _arrow(),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedRecipesScreen())),
+                  ),
+                  const Divider(height: 1),
 
                   ListTile(contentPadding: tilePadding, leading: _buildIcon(Icons.pie_chart, Colors.purple), title: Text(AppText.get('stats_title'), style: _tileStyle(textColor)), trailing: _arrow(), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StatsScreen()))),
                   const Divider(height: 1),
@@ -234,8 +259,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
 
                   const Divider(height: 1),
+
                   SwitchListTile(contentPadding: tilePadding, secondary: _buildIcon(Icons.dark_mode, Colors.deepPurple, bgColor: Colors.grey.shade200), title: Text(AppText.get('theme_dark') ?? "Dark Mode", style: _tileStyle(textColor)), value: isRealDarkMode, onChanged: _toggleDarkMode, activeColor: Colors.deepPurple),
+
                   const Divider(height: 1),
+
                   ListTile(contentPadding: tilePadding, leading: _buildIcon(Icons.language, Colors.blue), title: Text(AppText.get('language') ?? "Language", style: _tileStyle(textColor)), trailing: _arrow(), onTap: () => _showLanguageDialog()),
                 ])),
               ]),

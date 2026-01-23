@@ -4,8 +4,10 @@ import 'package:app_links/app_links.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../translations.dart';
-import '../main.dart'; // Щоб мати доступ до globalTabIndex
+import '../main.dart';
 import '../household_service.dart';
+import '../notification_service.dart';
+import '../product_model.dart';
 import 'shopping_list_screen.dart';
 import 'profile_screen.dart';
 import 'fridge_screen.dart';
@@ -19,14 +21,85 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = globalTabIndex;
   static const List<Widget> _pages = [FridgeContent(), ShoppingListScreen(), ProfileScreen()];
+
   late AppLinks _appLinks;
   StreamSubscription<Uri>? _linkSubscription;
+  StreamSubscription<QuerySnapshot>? _productSubscription;
 
   @override
   void initState() {
     super.initState();
     _initDeepLinks();
     _loadInitialSettings();
+    _initNotificationsAndCheckFridge();
+  }
+
+  Future<void> _initNotificationsAndCheckFridge() async {
+    await NotificationService.init();
+    _startListeningToFridge();
+  }
+
+  void _startListeningToFridge() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    FirebaseFirestore.instance.collection('users').doc(user.uid).get().then((doc) {
+      if (!mounted) return;
+
+      String? householdId;
+      if (doc.exists && doc.data() != null) {
+        householdId = (doc.data() as Map)['householdId'];
+      }
+
+      final collectionRef = householdId != null
+          ? FirebaseFirestore.instance.collection('households').doc(householdId).collection('products')
+          : FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products');
+
+      // 🔥 СЛУХАЄМО ЗМІНИ ТА ПЛАНУЄМО СПОВІЩЕННЯ
+      _productSubscription = collectionRef.snapshots().listen((snapshot) {
+        _scheduleAllNotifications(snapshot.docs);
+      });
+    });
+  }
+
+  // 🔥 ГОЛОВНА МАГІЯ ТУТ
+  void _scheduleAllNotifications(List<QueryDocumentSnapshot> docs) async {
+    // 1. Спочатку скасовуємо всі старі, щоб не було дублів
+    await NotificationService.cancelAll();
+
+    int expiringCount = 0;
+    String expiringNames = "";
+
+    for (var doc in docs) {
+      final product = Product.fromFirestore(doc);
+
+      if (product.category == 'trash') continue;
+
+      // 2. Якщо продукт ще свіжий, плануємо йому сповіщення на майбутнє
+      // Ми використовуємо hashcode назви як унікальний ID
+      await NotificationService.scheduleNotification(
+          product.id.hashCode,
+          product.name,
+          product.expirationDate
+      );
+
+      // 3. Якщо продукт ВЖЕ зіпсувався або ось-ось (сьогодні-завтра), показуємо сповіщення зараз
+      if (product.daysLeft <= 1 && product.daysLeft >= 0) {
+        expiringCount++;
+        if (expiringCount <= 3) expiringNames += "${product.name}, ";
+      }
+    }
+
+    // Якщо є критичні продукти прямо зараз — кажемо про це
+    if (expiringCount > 0) {
+      if (expiringNames.endsWith(", ")) {
+        expiringNames = expiringNames.substring(0, expiringNames.length - 2);
+      }
+      NotificationService.showInstantNotification(
+          "Увага! Продукти псуються ⏰",
+          "Треба з'їсти: $expiringNames"
+      );
+    }
   }
 
   Future<void> _initDeepLinks() async {
@@ -50,17 +123,28 @@ class _HomeScreenState extends State<HomeScreen> {
       content: Text("Знайдено код запрошення:\n$code\n\nБажаєте приєднатися?"),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppText.get('cancel'))),
-        ElevatedButton(onPressed: () { Navigator.pop(ctx); HouseholdService().requestToJoin(code).then((_) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppText.get('req_sent')), backgroundColor: Colors.blue)); }).catchError((e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Помилка: $e"), backgroundColor: Colors.red)); }); }, child: const Text("Приєднатися"))
+        ElevatedButton(onPressed: () {
+          Navigator.pop(ctx);
+          HouseholdService().requestToJoin(code).then((_) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppText.get('req_sent')), backgroundColor: Colors.blue));
+          }).catchError((e) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Помилка: $e"), backgroundColor: Colors.red));
+          });
+        }, child: const Text("Приєднатися"))
       ],
     ));
   }
 
   Future<void> _loadInitialSettings() async {
-    // ... (старий код)
+    // ...
   }
 
   @override
-  void dispose() { _linkSubscription?.cancel(); super.dispose(); }
+  void dispose() {
+    _linkSubscription?.cancel();
+    _productSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -1,106 +1,116 @@
-import 'dart:io';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'translations.dart'; // 👇 ОБОВ'ЯЗКОВО додай цей імпорт
 
 class NotificationService {
-  // Singleton pattern
-  static final NotificationService _instance = NotificationService._internal();
-  factory NotificationService() => _instance;
-  NotificationService._internal();
-
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+  static final FlutterLocalNotificationsPlugin _notifications =
   FlutterLocalNotificationsPlugin();
 
-  Future<void> init() async {
+  static Future<void> init() async {
     tz.initializeTimeZones();
 
-    const AndroidInitializationSettings initializationSettingsAndroid =
+    const AndroidInitializationSettings androidSettings =
     AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    const DarwinInitializationSettings initializationSettingsDarwin =
+    const DarwinInitializationSettings iosSettings =
     DarwinInitializationSettings(
-      requestSoundPermission: true,
-      requestBadgePermission: true,
       requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
     );
 
-    const InitializationSettings initializationSettings = InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsDarwin,
+    const InitializationSettings settings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
     );
 
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-  }
+    await _notifications.initialize(settings);
 
-  // 👇 Повертає true/false (дозволено чи ні)
-  Future<bool> requestPermission() async {
     if (Platform.isAndroid) {
-      final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
-      flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+      final androidImplementation = _notifications.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
-
-      final bool? granted = await androidImplementation?.requestNotificationsPermission();
-      return granted ?? false;
-    } else if (Platform.isIOS) {
-      final IOSFlutterLocalNotificationsPlugin? iosImplementation =
-      flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>();
-
-      final bool? granted = await iosImplementation?.requestPermissions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-      return granted ?? false;
+      await androidImplementation?.requestNotificationsPermission();
     }
-    return false;
   }
 
-  Future<void> scheduleNotification(int id, String productName, DateTime expirationDate) async {
+  // Миттєве сповіщення
+  static Future<void> showInstantNotification(String title, String body) async {
+    // 🔥 Використовуємо переклад для назви каналу (не критично, але приємно)
+    String channelName = AppText.get('notif_instant_title');
+    String channelDesc = AppText.get('notif_instant_body');
+
+    AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'expired_channel',
+      channelName,
+      channelDescription: channelDesc,
+      importance: Importance.max,
+      priority: Priority.high,
+      color: const Color(0xFFFF0000),
+    );
+
+    NotificationDetails details = NotificationDetails(android: androidDetails);
+
+    await _notifications.show(
+      DateTime.now().millisecond,
+      title, // Титул і боді ми передаємо при виклику, вони вже можуть бути перекладені ззовні
+      body,
+      details,
+    );
+  }
+
+  // Заплановане сповіщення
+  static Future<void> scheduleNotification(int id, String productName, DateTime expirationDate) async {
+    final DateTime warningDate = expirationDate.subtract(const Duration(days: 2));
+
+    final scheduledTime = DateTime(
+        warningDate.year,
+        warningDate.month,
+        warningDate.day,
+        10, 0, 0
+    );
+
+    if (scheduledTime.isBefore(DateTime.now())) return;
+
+    // 🔥 БЕРЕМО ПЕРЕКЛАД
+    String title = AppText.get('notif_warn_title'); // "З'їж мене! ⏰"
+    String bodySuffix = AppText.get('notif_warn_body'); // "закінчується через 2 дні!"
+    String fullBody = '$productName $bodySuffix';
+
+    String channelName = AppText.get('notif_channel_name');
+    String channelDesc = AppText.get('notif_channel_desc');
+
     try {
-      DateTime reminderDate = expirationDate.subtract(const Duration(days: 3));
-      DateTime scheduledTime = DateTime(
-        reminderDate.year,
-        reminderDate.month,
-        reminderDate.day,
-        9, 0,
-      );
-
-      if (scheduledTime.isBefore(DateTime.now())) {
-        scheduledTime = DateTime.now().add(const Duration(hours: 1));
-        if (expirationDate.isBefore(DateTime.now())) return;
-      }
-
-      await flutterLocalNotificationsPlugin.zonedSchedule(
+      await _notifications.zonedSchedule(
         id,
-        '⚠️ Перевір холодильник!',
-        'Термін придатності "$productName" спливає скоро!',
+        title,     // Перекладений заголовок
+        fullBody,  // Перекладений текст з назвою продукту
         tz.TZDateTime.from(scheduledTime, tz.local),
-        const NotificationDetails(
+        NotificationDetails(
           android: AndroidNotificationDetails(
-            'expiry_channel',
-            'Термін придатності',
-            channelDescription: 'Нагадування про закінчення терміну продуктів',
+            'reminder_channel',
+            channelName,
+            channelDescription: channelDesc,
             importance: Importance.max,
             priority: Priority.high,
-            color: Colors.green,
-            icon: '@mipmap/ic_launcher',
           ),
-          iOS: DarwinNotificationDetails(),
         ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidAllowWhileIdle: true,
         uiLocalNotificationDateInterpretation:
         UILocalNotificationDateInterpretation.absoluteTime,
       );
-      print("✅ Нагадування створено для $productName");
     } catch (e) {
-      print("❌ Помилка планування: $e");
+      debugPrint("Помилка планування: $e");
     }
   }
 
-  Future<void> cancelNotification(int id) async {
-    await flutterLocalNotificationsPlugin.cancel(id);
+  static Future<void> cancelNotification(int id) async {
+    await _notifications.cancel(id);
+  }
+
+  static Future<void> cancelAll() async {
+    await _notifications.cancelAll();
   }
 }

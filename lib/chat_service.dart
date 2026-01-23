@@ -7,12 +7,14 @@ class ChatService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  // Генерація ID для приватного чату
   String getDmChatId(String userId1, String userId2) {
     List<String> ids = [userId1, userId2];
     ids.sort();
     return "${ids[0]}_${ids[1]}";
   }
 
+  // Отримання повідомлень (Stream)
   Stream<QuerySnapshot> getMessages(String chatId, {bool isDirect = false}) {
     CollectionReference ref = isDirect
         ? _firestore.collection('chats').doc(chatId).collection('messages')
@@ -21,6 +23,7 @@ class ChatService {
     return ref.orderBy('timestamp', descending: true).snapshots();
   }
 
+  // 🔥 ОСЬ ЦЕЙ МЕТОД БУВ ВІДСУТНІЙ (Виправляє помилку в ProfileScreen)
   Stream<int> getUnreadCountStream(String householdId) {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return Stream.value(0);
@@ -30,7 +33,7 @@ class ChatService {
         .doc(householdId)
         .collection('messages')
         .orderBy('timestamp', descending: true)
-        .limit(50)
+        .limit(50) // Перевіряємо останні 50 повідомлень для економії
         .snapshots()
         .map((snapshot) {
       int count = 0;
@@ -45,6 +48,7 @@ class ChatService {
     });
   }
 
+  // Позначити як прочитане
   Future<void> markAsRead(String chatId, {bool isDirect = false}) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
@@ -70,7 +74,7 @@ class ChatService {
     if (needCommit) await batch.commit();
   }
 
-  // 👇 ДОПОМІЖНА ФУНКЦІЯ: Отримати аватарку поточного юзера
+  // Отримати аватарку поточного юзера (приватний метод)
   Future<String?> _getCurrentUserAvatar() async {
     try {
       final uid = _auth.currentUser?.uid;
@@ -82,9 +86,9 @@ class ChatService {
     }
   }
 
+  // Відправка тексту
   Future<void> sendMessage(String chatId, String text, {bool isDirect = false, String? replyToText, String? replyToSender}) async {
     final user = _auth.currentUser!;
-    // 👇 Беремо аватарку перед відправкою
     final avatar = await _getCurrentUserAvatar();
 
     final ref = isDirect
@@ -95,16 +99,16 @@ class ChatService {
       'text': text,
       'senderId': user.uid,
       'senderName': user.displayName ?? 'User',
-      'senderAvatar': avatar, // 👇 ЗБЕРІГАЄМО АВАТАРКУ В ПОВІДОМЛЕННЯ
+      'senderAvatar': avatar,
       'timestamp': FieldValue.serverTimestamp(),
       'readBy': [user.uid],
       'likes': [],
       'replyToText': replyToText,
       'replyToSender': replyToSender,
-      'isPinned': false,
     });
   }
 
+  // Лайк повідомлення
   Future<void> toggleLikeMessage(String chatId, String msgId, bool isLiked, {bool isDirect = false}) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
@@ -120,6 +124,7 @@ class ChatService {
     }
   }
 
+  // Редагування
   Future<void> editMessage(String chatId, String msgId, String newText, {bool isDirect = false}) async {
     final ref = isDirect
         ? _firestore.collection('chats').doc(chatId).collection('messages').doc(msgId)
@@ -128,6 +133,7 @@ class ChatService {
     await ref.update({'text': newText, 'isEdited': true});
   }
 
+  // Видалення
   Future<void> deleteMessage(String chatId, String msgId, {bool isDirect = false}) async {
     final ref = isDirect
         ? _firestore.collection('chats').doc(chatId).collection('messages').doc(msgId)
@@ -135,20 +141,23 @@ class ChatService {
     await ref.delete();
   }
 
+  // Відправка фото
   Future<void> sendImage(String chatId, File imageFile, {bool isDirect = false}) async {
     try {
       List<int> imageBytes = await imageFile.readAsBytes();
       String base64Image = base64Encode(imageBytes);
       final user = _auth.currentUser!;
-      final avatar = await _getCurrentUserAvatar(); // 👇 Беремо аватарку
+      final avatar = await _getCurrentUserAvatar();
 
-      final ref = isDirect ? _firestore.collection('chats').doc(chatId).collection('messages') : _firestore.collection('households').doc(chatId).collection('messages');
+      final ref = isDirect
+          ? _firestore.collection('chats').doc(chatId).collection('messages')
+          : _firestore.collection('households').doc(chatId).collection('messages');
 
       await ref.add({
         'imageBase64': base64Image,
         'senderId': user.uid,
         'senderName': user.displayName ?? 'User',
-        'senderAvatar': avatar, // 👇 ЗБЕРІГАЄМО
+        'senderAvatar': avatar,
         'timestamp': FieldValue.serverTimestamp(),
         'readBy': [user.uid],
         'likes': [],
@@ -158,6 +167,7 @@ class ChatService {
     }
   }
 
+  // Відправка голосового
   Future<void> sendVoice(String chatId, String path, {bool isDirect = false}) async {
     try {
       File file = File(path);
@@ -165,15 +175,17 @@ class ChatService {
       String base64Audio = base64Encode(audioBytes);
 
       final user = _auth.currentUser!;
-      final avatar = await _getCurrentUserAvatar(); // 👇 Беремо аватарку
+      final avatar = await _getCurrentUserAvatar();
 
-      final ref = isDirect ? _firestore.collection('chats').doc(chatId).collection('messages') : _firestore.collection('households').doc(chatId).collection('messages');
+      final ref = isDirect
+          ? _firestore.collection('chats').doc(chatId).collection('messages')
+          : _firestore.collection('households').doc(chatId).collection('messages');
 
       await ref.add({
         'audioBase64': base64Audio,
         'senderId': user.uid,
         'senderName': user.displayName ?? 'User',
-        'senderAvatar': avatar, // 👇 ЗБЕРІГАЄМО
+        'senderAvatar': avatar,
         'timestamp': FieldValue.serverTimestamp(),
         'readBy': [user.uid],
         'likes': [],

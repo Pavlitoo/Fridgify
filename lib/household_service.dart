@@ -6,13 +6,16 @@ class HouseholdService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  Future<String> createHousehold(String name) async {
+  // --- СТВОРЕННЯ ---
+  Future<void> createHousehold(String name) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception("User not logged in");
 
+    final batch = _firestore.batch();
+    final householdRef = _firestore.collection('households').doc();
     String inviteCode = _generateInviteCode();
 
-    DocumentReference householdRef = await _firestore.collection('households').add({
+    batch.set(householdRef, {
       'name': name,
       'adminId': user.uid,
       'inviteCode': inviteCode,
@@ -20,72 +23,73 @@ class HouseholdService {
       'members': [user.uid],
     });
 
-    await _firestore.collection('users').doc(user.uid).update({
+    final userRef = _firestore.collection('users').doc(user.uid);
+    batch.set(userRef, {
+      'uid': user.uid,
+      'email': user.email,
+      'displayName': user.displayName ?? 'User',
       'householdId': householdRef.id,
-    });
+    }, SetOptions(merge: true));
 
-    return householdRef.id;
+    await batch.commit();
   }
 
-  // 👇 ГОЛОВНИЙ ФІКС ТУТ
-  Future<void> requestToJoin(String inviteCode) async {
+  // --- ВСТУПИТИ (ЗАПИТ) ---
+  Future<void> requestToJoin(String code) async {
     final user = _auth.currentUser;
-    if (user == null) throw Exception("User not logged in");
+    if (user == null) return;
 
-    final userDoc = await _firestore.collection('users').doc(user.uid).get();
-    final String? avatarBase64 = userDoc.data()?['avatar_base64'];
+    // 1. Шукаємо сім'ю
+    final snapshot = await _firestore.collection('households').where('inviteCode', isEqualTo: code).limit(1).get();
 
-    final query = await _firestore.collection('households').where('inviteCode', isEqualTo: inviteCode).limit(1).get();
-
-    if (query.docs.isEmpty) {
-      throw Exception("Невірний код");
+    if (snapshot.docs.isEmpty) {
+      throw Exception("Невірний код. Сім'ю не знайдено.");
     }
 
-    final householdDoc = query.docs.first;
+    final householdDoc = snapshot.docs.first;
+    final householdId = householdDoc.id;
     List members = List.from(householdDoc.data()['members'] ?? []);
 
-    // Якщо ми вже в списку учасників
+    // 2. Якщо вже там
     if (members.contains(user.uid)) {
-      // Перевіряємо, чи ми ДІЙСНО прив'язані до цієї сім'ї в нашому профілі
-      if (userDoc.data()?['householdId'] == householdDoc.id) {
-        throw Exception("Ви вже є учасником цієї сім'ї");
-      } else {
-        // АГА! Ми в списку, але у нас немає householdId (нас видалили "криво").
-        // Виправляємо це: видаляємо себе зі списку учасників, щоб можна було зайти знову.
-        await householdDoc.reference.update({
-          'members': FieldValue.arrayRemove([user.uid])
-        });
-        // Тепер ми чисті і можемо подавати заявку далі.
-      }
+      // Якщо юзер в списку, але у нього немає householdId, фіксимо це:
+      await _firestore.collection('users').doc(user.uid).update({'householdId': householdId});
+      throw Exception("Ви вже в цій сім'ї.");
     }
 
+    // 3. Створюємо запит
     await householdDoc.reference.collection('requests').doc(user.uid).set({
       'uid': user.uid,
-      'name': user.displayName ?? 'Unknown',
+      'name': user.displayName ?? 'User',
       'email': user.email,
-      'avatar': avatarBase64,
+      'avatar': null,
       'timestamp': FieldValue.serverTimestamp(),
     });
   }
 
+  // --- ПРИЙНЯТИ (АДМІН) ---
   Future<void> acceptRequest(String householdId, String userId) async {
-    final householdRef = _firestore.collection('households').doc(householdId);
+    final batch = _firestore.batch();
 
-    await householdRef.update({
+    batch.update(_firestore.collection('households').doc(householdId), {
       'members': FieldValue.arrayUnion([userId])
     });
 
-    await _firestore.collection('users').doc(userId).update({
+    batch.update(_firestore.collection('users').doc(userId), {
       'householdId': householdId
     });
 
-    await householdRef.collection('requests').doc(userId).delete();
+    batch.delete(_firestore.collection('households').doc(householdId).collection('requests').doc(userId));
+
+    await batch.commit();
   }
 
+  // --- ВІДХИЛИТИ (АДМІН) ---
   Future<void> rejectRequest(String householdId, String userId) async {
     await _firestore.collection('households').doc(householdId).collection('requests').doc(userId).delete();
   }
 
+  // --- ВИЙТИ (САМОСТІЙНО) ---
   Future<void> leaveHousehold() async {
     final user = _auth.currentUser;
     if (user == null) return;
@@ -94,34 +98,44 @@ class HouseholdService {
     final householdId = userDoc.data()?['householdId'];
 
     if (householdId != null) {
-      await _firestore.collection('households').doc(householdId).update({
+      final batch = _firestore.batch();
+
+      batch.update(_firestore.collection('households').doc(householdId), {
         'members': FieldValue.arrayRemove([user.uid])
       });
-      await _firestore.collection('users').doc(user.uid).update({
+
+      batch.update(_firestore.collection('users').doc(user.uid), {
         'householdId': FieldValue.delete()
       });
+
+      await batch.commit();
     }
   }
 
-  // 👇 ФУНКЦІЯ ПОВНОГО ВИДАЛЕННЯ (Для адміна)
+  // --- ВИДАЛИТИ УЧАСНИКА (ФУНКЦІЯ АДМІНА) ---
   Future<void> removeMember(String householdId, String memberId) async {
-    // 1. Видаляємо зі списку учасників сім'ї
-    await _firestore.collection('households').doc(householdId).update({
+    final batch = _firestore.batch();
+
+    // Видаляємо зі списку сім'ї
+    batch.update(_firestore.collection('households').doc(householdId), {
       'members': FieldValue.arrayRemove([memberId])
     });
-    // 2. Очищаємо ID сім'ї у користувача (щоб він знав, що його видалили)
-    await _firestore.collection('users').doc(memberId).update({
+
+    // Видаляємо ID сім'ї у користувача
+    batch.update(_firestore.collection('users').doc(memberId), {
       'householdId': FieldValue.delete()
     });
+
+    await batch.commit();
+  }
+
+  Stream<QuerySnapshot> getRequestsStream(String householdId) {
+    return _firestore.collection('households').doc(householdId).collection('requests').snapshots();
   }
 
   String _generateInviteCode() {
     const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     Random rnd = Random();
     return String.fromCharCodes(Iterable.generate(6, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))));
-  }
-
-  Stream<QuerySnapshot> getRequestsStream(String householdId) {
-    return _firestore.collection('households').doc(householdId).collection('requests').snapshots();
   }
 }

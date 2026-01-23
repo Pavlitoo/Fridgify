@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../translations.dart';
 import '../global.dart';
+import '../error_handler.dart';
+import '../utils/snackbar_utils.dart'; // ✅ Гарні повідомлення
 
 class ShoppingListScreen extends StatefulWidget {
   const ShoppingListScreen({super.key});
+
   @override
   State<ShoppingListScreen> createState() => _ShoppingListScreenState();
 }
@@ -17,20 +20,23 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   String _selectedUnit = 'pcs';
 
   CollectionReference _getListCollection(String? householdId) {
-    return (householdId != null)
-        ? FirebaseFirestore.instance.collection('households').doc(householdId).collection('shopping_list')
-        : FirebaseFirestore.instance.collection('users').doc(user.uid).collection('shopping_list');
+    if (householdId != null) {
+      return FirebaseFirestore.instance.collection('households').doc(householdId).collection('shopping_list');
+    }
+    return FirebaseFirestore.instance.collection('users').doc(user.uid).collection('shopping_list');
   }
 
   CollectionReference _getFridgeCollection(String? householdId) {
-    return (householdId != null)
-        ? FirebaseFirestore.instance.collection('households').doc(householdId).collection('products')
-        : FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products');
+    if (householdId != null) {
+      return FirebaseFirestore.instance.collection('households').doc(householdId).collection('products');
+    }
+    return FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products');
   }
 
-  void _addItem(CollectionReference collection) {
-    if (_itemController.text.isNotEmpty) {
-      collection.add({
+  Future<void> _addItem(CollectionReference collection) async {
+    if (_itemController.text.trim().isEmpty) return;
+    try {
+      await collection.add({
         'name': _itemController.text.trim(),
         'quantity': double.tryParse(_qtyController.text) ?? 1.0,
         'unit': _selectedUnit,
@@ -39,173 +45,271 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       });
       _itemController.clear();
       _qtyController.text = '1';
+      FocusScope.of(context).unfocus();
+    } catch (e) {
+      if (mounted) SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
     }
   }
 
-  void _deleteItem(DocumentSnapshot doc) {
-    doc.reference.delete();
+  Future<void> _buyItem(String docId, Map<String, dynamic> data, String? householdId) async {
+    try {
+      final fridgeCol = _getFridgeCollection(householdId);
+
+      // Додаємо в холодильник
+      await fridgeCol.add({
+        'name': data['name'],
+        'quantity': data['quantity'],
+        'unit': data['unit'],
+        'category': 'other', // Можна зробити автовизначення категорії, якщо треба
+        'expirationDate': Timestamp.fromDate(DateTime.now().add(const Duration(days: 7))),
+        'addedDate': Timestamp.now(),
+      });
+
+      // Видаляємо зі списку покупок
+      final listCol = _getListCollection(householdId);
+      await listCol.doc(docId).delete();
+
+      if (mounted) {
+        // ✅ Гарне повідомлення про покупку
+        SnackbarUtils.showSuccess(context, "✅ ${data['name']} -> ${AppText.get('my_fridge')}");
+      }
+    } catch (e) {
+      if (mounted) SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
+    }
   }
 
-  void _toggleBought(DocumentSnapshot doc) {
-    doc.reference.update({'isBought': !doc['isBought']});
-  }
-
-  Future<void> _moveToFridge(DocumentSnapshot doc, String? householdId) async {
-    final data = doc.data() as Map<String, dynamic>;
-    final fridge = _getFridgeCollection(householdId);
-
-    await fridge.add({
-      'name': data['name'],
-      'quantity': data['quantity'],
-      'unit': data['unit'],
-      'category': 'other',
-      'expirationDate': Timestamp.fromDate(DateTime.now().add(const Duration(days: 7))),
-      'addedDate': Timestamp.now(),
-    });
-
-    await doc.reference.delete();
-    if(mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${AppText.get('add')} -> ${AppText.get('my_fridge')} ❄️"), backgroundColor: Colors.green));
+  void _deleteItem(String docId, CollectionReference collection, String name) {
+    collection.doc(docId).delete();
+    // ✅ Гарне повідомлення про видалення
+    if (mounted) {
+      SnackbarUtils.showWarning(context, "🗑 $name ${AppText.get('status_deleted')}");
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<String>(
-        valueListenable: languageNotifier,
-        builder: (context, lang, child) {
-          final textColor = Theme.of(context).textTheme.bodyLarge?.color;
-          final cardColor = Theme.of(context).cardColor;
-          final isDark = Theme.of(context).brightness == Brightness.dark;
-          final inputFill = isDark ? const Color(0xFF2C2C2C) : Colors.white;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final cardColor = Theme.of(context).cardColor;
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
 
-          return StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
-              builder: (context, userSnap) {
-                if (!userSnap.hasData && userSnap.connectionState == ConnectionState.waiting) {
-                  return const Scaffold(body: Center(child: CircularProgressIndicator()));
-                }
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
+      builder: (context, userSnap) {
+        final householdId = userSnap.data?.data() != null
+            ? (userSnap.data!.data() as Map)['householdId']
+            : null;
 
-                final householdId = userSnap.data?.data() != null ? (userSnap.data!.data() as Map)['householdId'] : null;
-                final collection = _getListCollection(householdId);
+        final collection = _getListCollection(householdId);
 
-                return Scaffold(
-                  backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-                  appBar: AppBar(title: Text(AppText.get('shopping_title')), backgroundColor: Theme.of(context).appBarTheme.backgroundColor, centerTitle: true),
-                  body: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(16.0),
-                        decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, 5))]),
-                        child: Column(
-                          children: [
-                            TextField(
-                              controller: _itemController,
+        return Scaffold(
+          backgroundColor: bgColor,
+          appBar: AppBar(
+            title: Text(AppText.get('shopping_title'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            centerTitle: true,
+            elevation: 0,
+            backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+          ),
+          body: Column(
+            children: [
+              // Поле вводу
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey[900] : Colors.green.shade50,
+                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+                ),
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: _itemController,
+                      style: TextStyle(color: textColor),
+                      decoration: InputDecoration(
+                        hintText: AppText.get('shopping_hint'),
+                        prefixIcon: const Icon(Icons.add_shopping_cart, color: Colors.green),
+                        filled: true,
+                        fillColor: cardColor,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _qtyController,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: textColor),
+                            decoration: InputDecoration(
+                              filled: true, fillColor: cardColor,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(15)),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _selectedUnit,
+                              dropdownColor: cardColor,
                               style: TextStyle(color: textColor),
-                              decoration: InputDecoration(hintText: AppText.get('shopping_hint'), hintStyle: TextStyle(color: Colors.grey.shade400), prefixIcon: const Icon(Icons.add_shopping_cart, color: Colors.green), filled: true, fillColor: isDark ? Colors.black12 : Colors.green.shade50, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)),
+                              onChanged: (val) => setState(() => _selectedUnit = val!),
+                              items: ['pcs', 'kg', 'g', 'l', 'ml'].map((u) => DropdownMenuItem(value: u, child: Text(AppText.get('u_$u')))).toList(),
                             ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        FloatingActionButton.small(
+                          onPressed: () => _addItem(collection),
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          elevation: 2,
+                          child: const Icon(Icons.add),
+                        )
+                      ],
+                    )
+                  ],
+                ),
+              ),
+
+              // Список
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: collection.orderBy('addedDate', descending: true).snapshots(),
+                  builder: (ctx, snapshot) {
+
+                    if (snapshot.hasError) {
+                      if (snapshot.error.toString().contains('permission-denied')) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+                            'householdId': FieldValue.delete()
+                          });
+                        });
+                      }
+
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.error_outline, size: 60, color: Colors.orange),
                             const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                Expanded(flex: 2, child: TextField(controller: _qtyController, keyboardType: TextInputType.number, style: TextStyle(color: textColor), textAlign: TextAlign.center, decoration: InputDecoration(hintText: "1", filled: true, fillColor: isDark ? Colors.black12 : Colors.green.shade50, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), contentPadding: const EdgeInsets.symmetric(horizontal: 10)))),
-                                const SizedBox(width: 8),
-                                Container(padding: const EdgeInsets.symmetric(horizontal: 10), decoration: BoxDecoration(color: isDark ? Colors.black12 : Colors.green.shade50, borderRadius: BorderRadius.circular(12)), child: DropdownButtonHideUnderline(child: DropdownButton<String>(value: _selectedUnit, dropdownColor: cardColor, icon: const Icon(Icons.arrow_drop_down, color: Colors.green), style: TextStyle(color: textColor, fontWeight: FontWeight.bold), items: ['pcs', 'kg', 'g', 'l', 'ml'].map((u) => DropdownMenuItem(value: u, child: Text(AppText.get('u_$u')))).toList(), onChanged: (v) => setState(() => _selectedUnit = v!)))),
-                                const SizedBox(width: 10),
-                                SizedBox(width: 50, height: 50, child: ElevatedButton(onPressed: () => _addItem(collection), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 2), child: const Icon(Icons.add, size: 28)))
-                              ],
-                            ),
+                            Text(ErrorHandler.getMessage(snapshot.error!), style: const TextStyle(color: Colors.grey)),
                           ],
                         ),
-                      ),
-                      Expanded(
-                        child: StreamBuilder<QuerySnapshot>(
-                          stream: collection.orderBy('addedDate', descending: true).snapshots(),
-                          builder: (context, snapshot) {
-                            if (snapshot.hasError) return const Center(child: Text("Error"));
-                            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                      );
+                    }
 
-                            final docs = List<DocumentSnapshot>.from(snapshot.data!.docs);
+                    if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-                            if (docs.isEmpty) {
-                              return Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(25),
-                                      decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), shape: BoxShape.circle),
-                                      child: Icon(Icons.shopping_cart_outlined, size: 80, color: Colors.green.shade300),
-                                    ),
-                                    const SizedBox(height: 20),
-                                    Text(AppText.get('list_empty'), style: TextStyle(fontSize: 18, color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
-                                    const SizedBox(height: 8),
-                                    Text(AppText.get('list_empty_sub'), style: TextStyle(fontSize: 14, color: Colors.grey.shade400)),
-                                  ],
-                                ),
-                              );
-                            }
+                    final docs = snapshot.data!.docs;
 
-                            docs.sort((a, b) {
-                              bool boughtA = (a.data() as Map)['isBought'] ?? false;
-                              bool boughtB = (b.data() as Map)['isBought'] ?? false;
-                              if (boughtA && !boughtB) return 1;
-                              if (!boughtA && boughtB) return -1;
-                              return 0;
-                            });
-
-                            return ListView.builder(
-                              itemCount: docs.length,
-                              padding: const EdgeInsets.all(16),
-                              itemBuilder: (context, index) {
-                                final doc = docs[index];
-                                final data = doc.data() as Map<String, dynamic>;
-                                bool isBought = data['isBought'] ?? false;
-                                String qtyStr = "${data['quantity'] ?? 1} ${AppText.get('u_${data['unit'] ?? 'pcs'}')}";
-
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 10),
-                                  child: Dismissible(
-                                    key: Key(doc.id),
-                                    background: Container(alignment: Alignment.centerLeft, padding: const EdgeInsets.only(left: 20), decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(15)), child: const Icon(Icons.delete, color: Colors.white)),
-                                    secondaryBackground: Container(alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 20), decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(15)), child: const Icon(Icons.kitchen, color: Colors.white)),
-                                    confirmDismiss: (direction) async {
-                                      if (direction == DismissDirection.startToEnd) { // Свайп вправо (Видалити)
-                                        _deleteItem(doc);
-                                        return true;
-                                      } else { // Свайп вліво (В холодильник)
-                                        await _moveToFridge(doc, householdId);
-                                        return false;
-                                      }
-                                    },
-                                    child: Card(
-                                      color: cardColor,
-                                      margin: EdgeInsets.zero,
-                                      elevation: 2,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                                      child: ListTile(
-                                        onTap: () => _toggleBought(doc),
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-                                        title: Text(data['name'], style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: isBought ? Colors.grey : textColor, decoration: isBought ? TextDecoration.lineThrough : null)),
-                                        trailing: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                            decoration: BoxDecoration(color: isBought ? Colors.grey.shade200 : Colors.green.shade50, borderRadius: BorderRadius.circular(8)),
-                                            child: Text(qtyStr, style: TextStyle(fontWeight: FontWeight.bold, color: isBought ? Colors.grey : Colors.green.shade700, fontSize: 14))
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            );
-                          },
+                    if (docs.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.shopping_basket_outlined, size: 80, color: Colors.grey.shade300),
+                            const SizedBox(height: 10),
+                            Text(AppText.get('list_empty'), style: TextStyle(fontSize: 18, color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+                            Text(AppText.get('list_empty_sub'), style: TextStyle(fontSize: 14, color: Colors.grey.shade400)),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-          );
-        }
+                      );
+                    }
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: docs.length,
+                      itemBuilder: (ctx, i) {
+                        final data = docs[i].data() as Map<String, dynamic>;
+                        final docId = docs[i].id;
+
+                        return Dismissible(
+                          key: Key(docId),
+                          // 🔥 ДОЗВОЛЯЄМО СВАЙП В ОБИДВІ СТОРОНИ
+                          direction: DismissDirection.horizontal,
+
+                          // Свайп вправо (Купити -> Холодильник)
+                          background: Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(15)),
+                            alignment: Alignment.centerLeft,
+                            padding: const EdgeInsets.only(left: 20),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.kitchen, color: Colors.white, size: 30),
+                                const SizedBox(width: 10),
+                                Text(AppText.get('my_fridge'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                              ],
+                            ),
+                          ),
+
+                          // Свайп вліво (Видалити)
+                          secondaryBackground: Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(color: Colors.red.shade400, borderRadius: BorderRadius.circular(15)),
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 20),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Text(AppText.get('btn_delete_forever'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                const SizedBox(width: 10),
+                                const Icon(Icons.delete_outline, color: Colors.white, size: 30),
+                              ],
+                            ),
+                          ),
+
+                          onDismissed: (direction) {
+                            if (direction == DismissDirection.startToEnd) {
+                              // Свайп вправо -> Купити
+                              _buyItem(docId, data, householdId);
+                            } else {
+                              // Свайп вліво -> Видалити
+                              _deleteItem(docId, collection, data['name']);
+                            }
+                          },
+
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(15),
+                              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+                            ),
+                            child: ListTile(
+                              // 🔥 ЗАМІНИВ КРУЖЕЧОК НА ІКОНКУ ПОКУПКИ
+                              leading: Icon(Icons.shopping_bag_outlined, color: isDark ? Colors.grey : Colors.grey.shade400),
+                              title: Text(
+                                  data['name'],
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)
+                              ),
+                              trailing: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                    color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(8)
+                                ),
+                                child: Text(
+                                  "${data['quantity']} ${AppText.get('u_${data['unit']}')}",
+                                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade600),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

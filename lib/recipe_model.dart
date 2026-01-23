@@ -2,35 +2,37 @@ class Recipe {
   final String title;
   final String description;
   final String imageUrl;
-  final String time;
-  final String kcal;
-  final List<String> ingredients;        // Ті, що є в холодильнику
-  final List<String> missingIngredients; // ✅ Ті, що треба докупити
-  final List<String> steps;
+  final String time;        // Напр: "30 хв"
+  final String kcal;        // Напр: "450"
+  final bool isVegetarian;
+  final List<String> ingredients;
+  final List<String> missingIngredients; // Що треба докупити
+  final List<String> steps;              // Інструкція
 
   Recipe({
     required this.title,
     required this.description,
     required this.imageUrl,
-    required this.time,
-    required this.kcal,
-    required this.ingredients,
-    required this.missingIngredients, // ✅ Додано в конструктор
-    required this.steps,
+    this.time = '---',
+    this.kcal = '---',
+    this.isVegetarian = false,
+    this.ingredients = const [],
+    this.missingIngredients = const [],
+    this.steps = const [],
   });
 
   factory Recipe.fromJson(Map<String, dynamic> json) {
     return Recipe(
       title: json['title'] ?? 'Без назви',
       description: json['description'] ?? '',
-      // URL тепер приходить готовим з AI сервісу, тому тут просто беремо рядок
-      imageUrl: json['imageUrl'] ?? 'https://via.placeholder.com/300?text=No+Image',
-      time: json['time'] ?? '30 хв',
-      kcal: json['kcal'] ?? '-',
+      imageUrl: json['imageUrl'] ?? 'https://via.placeholder.com/300',
+      time: json['time'] ?? json['cookingTime'] ?? '???',
+      kcal: json['kcal']?.toString() ?? json['calories']?.toString() ?? '???',
+      isVegetarian: json['isVegetarian'] ?? false,
+      // Читаємо списки безпечно
       ingredients: List<String>.from(json['ingredients'] ?? []),
-      // ✅ Читаємо список відсутніх продуктів з JSON
       missingIngredients: List<String>.from(json['missingIngredients'] ?? []),
-      steps: List<String>.from(json['steps'] ?? []),
+      steps: List<String>.from(json['steps'] ?? json['instructions'] ?? []),
     );
   }
 }

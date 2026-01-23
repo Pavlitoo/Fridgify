@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,14 +10,17 @@ import 'package:intl/intl.dart';
 import '../recipe_model.dart';
 import '../ai_service.dart';
 import '../product_model.dart';
-import '../translations.dart';
+import '../translations.dart'; // 👇 Тут ми беремо AppText
 import '../notification_service.dart';
 import '../subscription_service.dart';
-import '../premium_screen.dart';
 import '../ad_service.dart';
 import '../global.dart';
+import '../error_handler.dart';
+import '../utils/snackbar_utils.dart';
+import '../secrets.dart';
+import 'recipe_detail_screen.dart';
 
-// --- ДАНІ ДЛЯ КАТЕГОРІЙ ---
+// Глобальні змінні
 class CategoryData {
   final String id;
   final IconData icon;
@@ -46,7 +50,6 @@ Locale getAppLocale(String langName) {
   }
 }
 
-// --- ГОЛОВНИЙ ЕКРАН ---
 class FridgeContent extends StatefulWidget {
   const FridgeContent({super.key});
 
@@ -54,27 +57,85 @@ class FridgeContent extends StatefulWidget {
   State<FridgeContent> createState() => _FridgeContentState();
 }
 
-class _FridgeContentState extends State<FridgeContent> {
+class _FridgeContentState extends State<FridgeContent> with TickerProviderStateMixin {
   final user = FirebaseAuth.instance.currentUser!;
   final Set<String> _selectedProductIds = {};
-  final List<String> _selectedProductNames = [];
   String _selectedCategoryFilter = 'all';
 
-  // Реклама
   BannerAd? _bannerAd;
   bool _isBannerLoaded = false;
+  String _selectedDiet = 'standard';
+
+  StreamSubscription<QuerySnapshot>? _productSubscription;
 
   @override
   void initState() {
     super.initState();
     _initAds();
+    _setupNotifications();
+  }
+
+  void _setupNotifications() {
+    FirebaseFirestore.instance.collection('users').doc(user.uid).get().then((doc) {
+      if (!mounted) return;
+
+      String? householdId;
+      if (doc.exists && doc.data() != null) {
+        householdId = (doc.data() as Map)['householdId'];
+      }
+
+      final collectionRef = householdId != null
+          ? FirebaseFirestore.instance.collection('households').doc(householdId).collection('products')
+          : FirebaseFirestore.instance.collection('users').doc(user.uid).collection('products');
+
+      _productSubscription = collectionRef.snapshots().listen((snapshot) {
+        _scheduleAllNotifications(snapshot.docs);
+      });
+    });
+  }
+
+  // 🔥 ОНОВЛЕНИЙ МЕТОД ДЛЯ МИТТЄВИХ СПОВІЩЕНЬ З ПЕРЕКЛАДОМ
+  void _scheduleAllNotifications(List<QueryDocumentSnapshot> docs) async {
+    await NotificationService.cancelAll();
+
+    List<String> expiredItems = [];
+
+    for (var doc in docs) {
+      final product = Product.fromFirestore(doc);
+      if (product.category == 'trash') continue;
+
+      // 1. Плануємо майбутні сповіщення (вони використовують переклад всередині сервісу)
+      await NotificationService.scheduleNotification(
+          product.id.hashCode,
+          product.name,
+          product.expirationDate
+      );
+
+      // 2. Перевіряємо, чи продукт ВЖЕ зіпсувався або ось-ось (менше 2 днів)
+      final daysLeft = product.expirationDate.difference(DateTime.now()).inDays;
+      if (daysLeft <= 1) { // 1 день або менше (або прострочено)
+        expiredItems.add(product.name);
+      }
+    }
+
+    // 3. Якщо є зіпсовані продукти - показуємо миттєве сповіщення мовою додатка
+    if (expiredItems.isNotEmpty) {
+      // 🔥 БЕРЕМО ПЕРЕКЛАД З TRANSLATIONS.DART
+      String title = AppText.get('notif_instant_title'); // "Зіпсовані продукти" / "Rotten items"
+      String bodyPrefix = AppText.get('notif_instant_body'); // "Важливо!..." / "Important!..."
+
+      // Формуємо список: "Milk, Apple, Cheese"
+      String listString = expiredItems.join(', ');
+
+      NotificationService.showInstantNotification(
+          title,
+          "$bodyPrefix: $listString"
+      );
+    }
   }
 
   void _initAds() {
-    // Ініціалізація сервісу (відео)
     AdService().init();
-
-    // Завантаження банера, якщо немає Premium
     if (!SubscriptionService().isPremium) {
       _loadBannerAd();
     }
@@ -82,7 +143,7 @@ class _FridgeContentState extends State<FridgeContent> {
 
   void _loadBannerAd() {
     _bannerAd = BannerAd(
-      adUnitId: AdService().bannerAdUnitId,
+      adUnitId: Secrets.adUnitId,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
@@ -100,10 +161,10 @@ class _FridgeContentState extends State<FridgeContent> {
   @override
   void dispose() {
     _bannerAd?.dispose();
+    _productSubscription?.cancel();
     super.dispose();
   }
 
-  // --- РОБОТА З FIREBASE ---
   CollectionReference _getProductsCollection(String? householdId) {
     return (householdId != null)
         ? FirebaseFirestore.instance.collection('households').doc(householdId).collection('products')
@@ -116,39 +177,26 @@ class _FridgeContentState extends State<FridgeContent> {
         : FirebaseFirestore.instance.collection('users').doc(user.uid).collection('shopping_list');
   }
 
-  void _toggleSelection(String id, String name) {
+  void _toggleSelection(String id) {
     setState(() {
       if (_selectedProductIds.contains(id)) {
         _selectedProductIds.remove(id);
-        _selectedProductNames.remove(name);
       } else {
         _selectedProductIds.add(id);
-        _selectedProductNames.add(name);
       }
     });
   }
 
-  Future<void> _logHistory(String action, String productName) async {
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('history')
-        .add({'action': action, 'product': productName, 'date': Timestamp.now()});
-  }
-
   void _deleteProductForever(Product product, CollectionReference collection) {
-    NotificationService().cancelNotification(product.id.hashCode);
+    NotificationService.cancelNotification(product.id.hashCode);
     collection.doc(product.id).delete();
   }
 
   void _moveToTrash(Product product, CollectionReference collection) {
-    collection.doc(product.id).update({
-      'category': 'trash'
-    });
-    NotificationService().cancelNotification(product.id.hashCode);
+    collection.doc(product.id).update({'category': 'trash'});
+    NotificationService.cancelNotification(product.id.hashCode);
   }
 
-  // --- СМІТНИК ТА ВІДНОВЛЕННЯ ---
   Future<void> _moveFromTrashToShopList(Product product, CollectionReference fridgeCollection, CollectionReference listCollection) async {
     try {
       await listCollection.add({
@@ -158,18 +206,16 @@ class _FridgeContentState extends State<FridgeContent> {
         'isBought': false,
         'addedDate': Timestamp.now(),
       });
-      _logHistory('wasted', product.name);
       _deleteProductForever(product, fridgeCollection);
 
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("🛒 ${product.name} ${AppText.get('yes_list')}"),
-          backgroundColor: Colors.orange,
-        ));
+        SnackbarUtils.showSuccess(context, "🛒 ${product.name} ${AppText.get('yes_list')}");
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) {
+        SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
+      }
     }
   }
 
@@ -184,10 +230,9 @@ class _FridgeContentState extends State<FridgeContent> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppText.get('cancel'))),
           ElevatedButton(
             onPressed: () {
-              _logHistory('wasted', product.name);
               _deleteProductForever(product, collection);
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppText.get('msg_deleted_forever')), backgroundColor: Colors.red));
+              SnackbarUtils.showWarning(context, AppText.get('msg_deleted_forever'));
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
             child: const Text("OK"),
@@ -199,16 +244,12 @@ class _FridgeContentState extends State<FridgeContent> {
 
   void _handleRestore(Product product, CollectionReference collection) {
     if (product.daysLeft <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppText.get('msg_change_date')), backgroundColor: Colors.orange)
-      );
+      SnackbarUtils.showWarning(context, AppText.get('msg_change_date'));
       _showProductDialog(productToEdit: product, collection: collection);
     } else {
       collection.doc(product.id).update({'category': 'other'});
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppText.get('msg_restored')), backgroundColor: Colors.green)
-      );
+      SnackbarUtils.showSuccess(context, AppText.get('msg_restored'));
     }
   }
 
@@ -252,7 +293,7 @@ class _FridgeContentState extends State<FridgeContent> {
                       if (!snap.hasData) return const Center(child: CircularProgressIndicator());
 
                       final allDocs = snap.data!.docs.map((doc) => Product.fromFirestore(doc)).toList();
-                      final trashProducts = allDocs.where((p) => p.daysLeft <= 0 || p.category == 'trash').toList();
+                      final trashProducts = allDocs.where((p) => p.category == 'trash' || p.daysLeft <= 0).toList();
 
                       if (trashProducts.isEmpty) {
                         return Center(child: Text(AppText.get('trash_empty'), style: TextStyle(color: subTextColor, fontSize: 16)));
@@ -264,15 +305,8 @@ class _FridgeContentState extends State<FridgeContent> {
                         itemBuilder: (ctx, i) {
                           final product = trashProducts[i];
                           bool isManualDelete = product.category == 'trash';
-
-                          Color bg = isManualDelete
-                              ? (isDark ? Colors.grey.shade800 : Colors.grey.shade200)
-                              : (isDark ? Colors.red.withOpacity(0.15) : Colors.red.shade50.withOpacity(0.5));
-                          Color iconColor = isManualDelete
-                              ? (isDark ? Colors.grey.shade400 : Colors.grey)
-                              : Colors.red;
-                          Color subtitleColor = iconColor;
-
+                          Color bg = isManualDelete ? (isDark ? Colors.grey.shade800 : Colors.grey.shade200) : (isDark ? Colors.red.withOpacity(0.15) : Colors.red.shade50.withOpacity(0.5));
+                          Color iconColor = isManualDelete ? (isDark ? Colors.grey.shade400 : Colors.grey) : Colors.red;
                           return Card(
                             color: bg,
                             elevation: 0,
@@ -282,10 +316,8 @@ class _FridgeContentState extends State<FridgeContent> {
                               leading: Icon(isManualDelete ? Icons.delete_outline : Icons.warning_amber_rounded, color: iconColor),
                               title: Text(product.name, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, decoration: TextDecoration.lineThrough)),
                               subtitle: Text(
-                                  isManualDelete
-                                      ? AppText.get('status_deleted')
-                                      : "${AppText.get('status_rotten')} ${product.daysLeft.abs()} ${AppText.get('ago_suffix')}",
-                                  style: TextStyle(color: subtitleColor)
+                                  isManualDelete ? AppText.get('status_deleted') : "${AppText.get('status_rotten')} ${product.daysLeft.abs()} ${AppText.get('ago_suffix')}",
+                                  style: TextStyle(color: iconColor)
                               ),
                               trailing: PopupMenuButton<String>(
                                 icon: const Icon(Icons.more_vert, color: Colors.grey),
@@ -315,7 +347,6 @@ class _FridgeContentState extends State<FridgeContent> {
     );
   }
 
-  // --- ДІАЛОГИ ---
   void _showConsumeDialog(Product product, CollectionReference collection) {
     final TextEditingController consumeController = TextEditingController();
     bool isPcs = product.unit == 'pcs';
@@ -355,16 +386,14 @@ class _FridgeContentState extends State<FridgeContent> {
               if (consumed <= 0) return;
 
               if (consumed >= product.quantity) {
-                _logHistory('eaten', product.name);
                 _deleteProductForever(product, collection);
               } else {
                 double newQty = product.quantity - consumed;
                 newQty = (newQty * 100).round() / 100;
                 collection.doc(product.id).update({'quantity': newQty});
-                _logHistory('eaten', "${product.name} ($consumed ${product.unit})");
               }
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("😋"), backgroundColor: Colors.green));
+              SnackbarUtils.showSuccess(context, "😋 ${AppText.get('action_eaten')}");
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
             child: Text(AppText.get('save')),
@@ -387,7 +416,7 @@ class _FridgeContentState extends State<FridgeContent> {
             onPressed: () {
               _moveToTrash(product, collection);
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${AppText.get('status_deleted')} 🗑"), backgroundColor: Colors.orange));
+              SnackbarUtils.showWarning(context, "${AppText.get('status_deleted')} 🗑");
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
             child: const Text("OK"),
@@ -449,7 +478,7 @@ class _FridgeContentState extends State<FridgeContent> {
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: Text(AppText.get('cancel'), style: TextStyle(fontSize: 16, color: textColor))),
-              ElevatedButton(onPressed: () async { if (nameController.text.isNotEmpty) { final qty = double.tryParse(qtyController.text) ?? 1.0; final data = {'name': nameController.text.trim(), 'expirationDate': Timestamp.fromDate(selectedDate), 'category': selectedCategory, 'quantity': qty, 'unit': selectedUnit}; if (isEditing) { await collection.doc(productToEdit.id).update(data); NotificationService().cancelNotification(productToEdit.id.hashCode); NotificationService().scheduleNotification(productToEdit.id.hashCode, nameController.text.trim(), selectedDate); } else { final docRef = await collection.add({...data, 'addedDate': Timestamp.now()}); NotificationService().scheduleNotification(docRef.id.hashCode, nameController.text.trim(), selectedDate); } Navigator.pop(context); } }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: Text(isEditing ? AppText.get('save') : AppText.get('add'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))
+              ElevatedButton(onPressed: () async { if (nameController.text.isNotEmpty) { final qty = double.tryParse(qtyController.text) ?? 1.0; final data = {'name': nameController.text.trim(), 'expirationDate': Timestamp.fromDate(selectedDate), 'category': selectedCategory, 'quantity': qty, 'unit': selectedUnit}; if (isEditing) { await collection.doc(productToEdit.id).update(data); NotificationService.cancelNotification(productToEdit.id.hashCode); NotificationService.scheduleNotification(productToEdit.id.hashCode, nameController.text.trim(), selectedDate); } else { final docRef = await collection.add({...data, 'addedDate': Timestamp.now()}); NotificationService.scheduleNotification(docRef.id.hashCode, nameController.text.trim(), selectedDate); } Navigator.pop(context); } }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: Text(isEditing ? AppText.get('save') : AppText.get('add'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))
             ],
           );
         });
@@ -457,34 +486,118 @@ class _FridgeContentState extends State<FridgeContent> {
     );
   }
 
-  // --- ЛОГІКА РЕКЛАМИ І ПОШУКУ ---
-  Future<void> _checkLimitAndSearch() async {
-    if (_selectedProductNames.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Select products!")));
+  // 🔥 МЕНЮ ВИБОРУ ДІЄТИ
+  Future<void> _checkLimitAndSearch(List<Product> allProducts) async {
+    if (_selectedProductIds.isEmpty) {
+      SnackbarUtils.showWarning(context, AppText.get('msg_select_products'));
+      return;
+    }
+
+    List<String> detailedIngredients = [];
+    for (var p in allProducts) {
+      if (_selectedProductIds.contains(p.id)) {
+        detailedIngredients.add("${p.name} (${p.quantity} ${p.unit})");
+      }
+    }
+
+    try {
+      final result = await InternetAddress.lookup('google.com');
+      if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {}
+    } on SocketException catch (_) {
+      SnackbarUtils.showError(context, "${AppText.get('err_no_internet_short')} 🔌");
       return;
     }
 
     bool canContinue = await AdService().checkAndShowAd(context);
-
     if (canContinue) {
-      _searchRecipes();
+      _showDietSelectionDialog(detailedIngredients);
     }
   }
 
-  Future<void> _searchRecipes() async {
+  void _showDietSelectionDialog(List<String> detailedIngredients) {
+    final diets = [
+      {'id': 'standard', 'label': 'diet_standard', 'icon': Icons.restaurant},
+      {'id': 'vegetarian', 'label': 'diet_vegetarian', 'icon': Icons.eco},
+      {'id': 'vegan', 'label': 'diet_vegan', 'icon': Icons.spa},
+      {'id': 'healthy', 'label': 'diet_healthy', 'icon': Icons.monitor_heart},
+      {'id': 'keto', 'label': 'diet_keto', 'icon': Icons.fitness_center},
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(AppText.get('diet_title'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              alignment: WrapAlignment.center,
+              children: diets.map((diet) {
+                final isSelected = _selectedDiet == diet['id'];
+                return ChoiceChip(
+                  label: Text(AppText.get(diet['label'] as String)),
+                  avatar: Icon(diet['icon'] as IconData, size: 18, color: isSelected ? Colors.white : Colors.green),
+                  selected: isSelected,
+                  selectedColor: Colors.green,
+                  backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                  labelStyle: TextStyle(color: isSelected ? Colors.white : Theme.of(context).textTheme.bodyLarge?.color),
+                  onSelected: (val) {
+                    setState(() => _selectedDiet = diet['id'] as String);
+                    Navigator.pop(context);
+                    _showDietSelectionDialog(detailedIngredients);
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 25),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _searchRecipes(detailedIngredients);
+                },
+                icon: const Icon(Icons.search, color: Colors.white),
+                label: Text(AppText.get('btn_start_cooking'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _searchRecipes(List<String> detailedIngredients) async {
+    // 🔥 МАЛЕНЬКИЙ КВАДРАТНИЙ ДІАЛОГ
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => Center(
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(20)),
-          child: const Column(
+          padding: const EdgeInsets.all(20),
+          width: 150,
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(color: Colors.green),
-              SizedBox(height: 20),
-              Text("AI Chef... 👨‍🍳", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const CircularProgressIndicator(color: Colors.green),
+              const SizedBox(height: 16),
+              Text(
+                  AppText.get('msg_ai_thinking'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)
+              ),
             ],
           ),
         ),
@@ -493,8 +606,9 @@ class _FridgeContentState extends State<FridgeContent> {
 
     try {
       final recipes = await AiRecipeService().getRecipes(
-        ingredients: _selectedProductNames,
+        ingredients: detailedIngredients,
         userLanguage: languageNotifier.value,
+        dietType: _selectedDiet,
       );
 
       if (!mounted) return;
@@ -504,7 +618,19 @@ class _FridgeContentState extends State<FridgeContent> {
     } catch (e) {
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+
+        // 🔥 Обробка помилок
+        if (e.toString().contains('INVALID_INGREDIENTS')) {
+          SnackbarUtils.showWarning(context, AppText.get('err_invalid_ingredients'));
+        } else if (e.toString().contains('401')) {
+          SnackbarUtils.showError(context, "Помилка авторизації (401). Перевірте ключ API.");
+        } else if (e is SocketException || e.toString().contains('No Internet')) {
+          SnackbarUtils.showError(context, "${AppText.get('err_no_internet_short')} 🔌");
+        } else if (e is TimeoutException || e.toString().contains('TIMEOUT')) {
+          SnackbarUtils.showError(context, "Час вийшов! Спробуйте пізніше.");
+        } else {
+          SnackbarUtils.showError(context, "${AppText.get('err_general')}: ${e.toString()}");
+        }
       }
     }
   }
@@ -531,18 +657,10 @@ class _FridgeContentState extends State<FridgeContent> {
             padding: const EdgeInsets.only(top: 10),
             child: Column(
               children: [
-                Container(
-                  width: 40,
-                  height: 5,
-                  decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(10)),
-                ),
+                Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(10))),
                 const SizedBox(height: 15),
-                Text(
-                  AppText.get('recipe_title'),
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor),
-                ),
+                Text(AppText.get('recipe_title'), style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
                 const SizedBox(height: 10),
-
                 Expanded(
                   child: ListView.builder(
                     controller: controller,
@@ -550,141 +668,95 @@ class _FridgeContentState extends State<FridgeContent> {
                     itemCount: recipes.length,
                     itemBuilder: (ctx, i) {
                       final recipe = recipes[i];
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 24),
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 15, offset: const Offset(0, 5))
-                          ],
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              height: 220,
-                              width: double.infinity,
-                              child: Image.network(
-                                recipe.imageUrl,
-                                fit: BoxFit.cover,
-                                loadingBuilder: (context, child, loadingProgress) {
-                                  if (loadingProgress == null) return child;
-                                  return Center(child: CircularProgressIndicator(color: Colors.green));
-                                },
-                                errorBuilder: (context, error, stackTrace) => Container(
-                                  color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-                                  child: const Center(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.restaurant, size: 40, color: Colors.grey),
-                                        SizedBox(height: 5),
-                                        Text("No Image", style: TextStyle(color: Colors.grey)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
+                      final bool hasMissing = recipe.missingIngredients.isNotEmpty;
 
-                            Padding(
-                              padding: const EdgeInsets.all(20.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                      String dietLabelKey = 'tag_standard';
+                      Color badgeColor = Colors.orange;
+
+                      if (_selectedDiet == 'vegetarian') { dietLabelKey = 'tag_vegetarian'; badgeColor = Colors.green; }
+                      else if (_selectedDiet == 'vegan') { dietLabelKey = 'tag_vegan'; badgeColor = Colors.lightGreen; }
+                      else if (_selectedDiet == 'keto') { dietLabelKey = 'tag_keto'; badgeColor = Colors.purple; }
+                      else if (_selectedDiet == 'healthy') { dietLabelKey = 'tag_healthy'; badgeColor = Colors.teal; }
+                      else if (recipe.isVegetarian) { dietLabelKey = 'tag_vegetarian'; badgeColor = Colors.green; }
+
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => RecipeDetailScreen(recipe: recipe, dietLabelKey: dietLabelKey)));
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 24),
+                          decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 15, offset: const Offset(0, 5))]
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Stack(
                                 children: [
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          recipe.title,
-                                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor, height: 1.2),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                        decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                                        child: Column(children: [
-                                          const Icon(Icons.local_fire_department, size: 20, color: Colors.orange),
-                                          Text(recipe.kcal, style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 12))
-                                        ]),
-                                      )
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-
-                                  Row(children: [
-                                    const Icon(Icons.access_time, size: 18, color: Colors.green),
-                                    const SizedBox(width: 6),
-                                    Text(recipe.time, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold))
-                                  ]),
-                                  const SizedBox(height: 12),
-
-                                  Text(recipe.description, style: TextStyle(color: textColor?.withOpacity(0.7), fontSize: 15)),
-                                  const Divider(height: 30),
-
-                                  Text(AppText.get('ingredients_title'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                  const SizedBox(height: 10),
-                                  Wrap(
-                                    spacing: 8, runSpacing: 8,
-                                    children: recipe.ingredients.map((ing) => Chip(
-                                      label: Text(ing),
-                                      backgroundColor: Colors.green.withOpacity(0.1),
-                                      labelStyle: TextStyle(color: Colors.green.shade800),
-                                      side: BorderSide.none,
-                                    )).toList(),
-                                  ),
-
-                                  if (recipe.missingIngredients.isNotEmpty) ...[
-                                    const SizedBox(height: 20),
-                                    Text(AppText.get('missing_title'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.red)),
-                                    const SizedBox(height: 10),
-                                    Wrap(
-                                      spacing: 8, runSpacing: 8,
-                                      children: recipe.missingIngredients.map((ing) => Chip(
-                                        avatar: const Icon(Icons.add_shopping_cart, size: 16, color: Colors.red),
-                                        label: Text(ing),
-                                        backgroundColor: Colors.red.withOpacity(0.1),
-                                        labelStyle: TextStyle(color: Colors.red.shade800),
-                                        side: BorderSide.none,
-                                      )).toList(),
+                                  SizedBox(
+                                    height: 200,
+                                    width: double.infinity,
+                                    child: Image.network(
+                                      recipe.imageUrl,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) => Container(color: Colors.grey.shade200, child: const Center(child: Icon(Icons.restaurant, size: 40, color: Colors.grey))),
                                     ),
-                                  ],
-
-                                  const SizedBox(height: 20),
-
-                                  ExpansionTile(
-                                    tilePadding: EdgeInsets.zero,
-                                    initiallyExpanded: false,
-                                    title: Text(AppText.get('recipe_steps'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                                    children: recipe.steps.asMap().entries.map((entry) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 16.0),
-                                      child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          CircleAvatar(
-                                            radius: 12,
-                                            backgroundColor: Colors.green,
-                                            child: Text("${entry.key + 1}", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(child: Text(entry.value, style: TextStyle(fontSize: 16, color: textColor, height: 1.4)))
-                                        ],
-                                      ),
-                                    )).toList(),
-                                  )
+                                  ),
+                                  Positioned(
+                                    top: 10, right: 10,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(color: badgeColor, borderRadius: BorderRadius.circular(8)),
+                                      child: Row(children: [
+                                        const Icon(Icons.eco, color: Colors.white, size: 14),
+                                        const SizedBox(width: 4),
+                                        Text(AppText.get(dietLabelKey), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))
+                                      ]),
+                                    ),
+                                  ),
                                 ],
                               ),
-                            )
-                          ],
+                              Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(recipe.title, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor, height: 1.2)),
+                                    const SizedBox(height: 8),
+                                    Row(children: [
+                                      Icon(Icons.timer_outlined, size: 16, color: Colors.grey[600]),
+                                      const SizedBox(width: 4),
+                                      Text(recipe.time, style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.bold)),
+                                      const SizedBox(width: 15),
+                                      Icon(Icons.local_fire_department, size: 16, color: Colors.orange),
+                                      const SizedBox(width: 4),
+                                      Text("${recipe.kcal} ${AppText.get('rec_kcal')}", style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.bold)),
+                                    ]),
+                                    if (hasMissing) ...[
+                                      const SizedBox(height: 10),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                                        child: Text("${AppText.get('missing_title')} ${recipe.missingIngredients.length}", style: TextStyle(color: Colors.red.shade700, fontSize: 12, fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 10),
+                                    Text(recipe.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: textColor?.withOpacity(0.7), fontSize: 14)),
+                                  ],
+                                ),
+                              )
+                            ],
+                          ),
                         ),
                       );
                     },
                   ),
                 ),
+                if (_bannerAd != null && _isBannerLoaded && !SubscriptionService().isPremium)
+                  Container(alignment: Alignment.center, width: _bannerAd!.size.width.toDouble(), height: _bannerAd!.size.height.toDouble(), child: AdWidget(ad: _bannerAd!)),
               ],
             ),
           );
@@ -693,7 +765,7 @@ class _FridgeContentState extends State<FridgeContent> {
     );
   }
 
-  // --- ПОБУДОВА ІНТЕРФЕЙСУ (BUILD) ---
+  // 🔥 МЕТОД BUILD, ЩОБ ПРИБРАТИ ПОМИЛКУ
   @override
   Widget build(BuildContext context) {
     final textColor = Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
@@ -710,23 +782,13 @@ class _FridgeContentState extends State<FridgeContent> {
         return StreamBuilder<QuerySnapshot>(
           stream: collection.orderBy('expirationDate').snapshots(),
           builder: (ctx, productSnap) {
-
-            if (!productSnap.hasData) {
-              return Scaffold(
-                backgroundColor: bgColor,
-                appBar: AppBar(title: Text(AppText.get('my_fridge')), centerTitle: true),
-                body: const Center(child: CircularProgressIndicator()),
-              );
-            }
+            if (productSnap.hasError) return const Center(child: CircularProgressIndicator());
+            if (!productSnap.hasData) return Scaffold(backgroundColor: bgColor, appBar: AppBar(title: Text(AppText.get('my_fridge'))), body: const Center(child: CircularProgressIndicator()));
 
             final allProducts = productSnap.data!.docs.map((doc) => Product.fromFirestore(doc)).toList();
-
-            final trashProducts = allProducts.where((p) => p.daysLeft <= 0 || p.category == 'trash').toList();
-            final freshProducts = allProducts.where((p) => p.daysLeft > 0 && p.category != 'trash').toList();
-
-            final visibleProducts = _selectedCategoryFilter == 'all'
-                ? freshProducts
-                : freshProducts.where((p) => p.category == _selectedCategoryFilter).toList();
+            final trashProducts = allProducts.where((p) => p.category == 'trash' || p.daysLeft <= 0).toList();
+            final freshProducts = allProducts.where((p) => p.category != 'trash' && p.daysLeft > 0).toList();
+            final visibleProducts = _selectedCategoryFilter == 'all' ? freshProducts : freshProducts.where((p) => p.category == _selectedCategoryFilter).toList();
 
             return Scaffold(
               backgroundColor: bgColor,
@@ -735,39 +797,10 @@ class _FridgeContentState extends State<FridgeContent> {
                 backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
                 centerTitle: true,
                 actions: [
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      IconButton(
-                        icon: Icon(Icons.delete_sweep_outlined,
-                            color: trashProducts.isEmpty ? Colors.grey.withOpacity(0.5) : Colors.red
-                        ),
-                        onPressed: () {
-                          if (trashProducts.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(AppText.get('trash_empty')), duration: const Duration(seconds: 1))
-                            );
-                          } else {
-                            _openTrashBin(collection, shopListCollection);
-                          }
-                        },
-                      ),
-                      if (trashProducts.isNotEmpty)
-                        Positioned(
-                          right: 8,
-                          top: 8,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                            child: Text(
-                              '${trashProducts.length}',
-                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        )
-                    ],
+                  IconButton(
+                    icon: Icon(Icons.delete_sweep_outlined, color: trashProducts.isEmpty ? Colors.grey.withOpacity(0.5) : Colors.red),
+                    onPressed: () => trashProducts.isEmpty ? SnackbarUtils.showWarning(context, AppText.get('trash_empty')) : _openTrashBin(collection, shopListCollection),
                   ),
-                  const SizedBox(width: 8),
                 ],
               ),
               body: Column(
@@ -782,83 +815,42 @@ class _FridgeContentState extends State<FridgeContent> {
                   ),
                   Expanded(
                     child: visibleProducts.isEmpty
-                        ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.kitchen_outlined, size: 80, color: Colors.green.shade300),
-                          const SizedBox(height: 10),
-                          Text(AppText.get('empty_fridge'), style: TextStyle(color: Colors.grey)),
-                        ],
-                      ),
-                    )
+                        ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.kitchen_outlined, size: 80, color: Colors.green.shade300), const SizedBox(height: 10), Text(AppText.get('empty_fridge'), style: TextStyle(color: Colors.grey))]))
                         : ListView.builder(
                       itemCount: visibleProducts.length,
                       itemBuilder: (ctx, i) {
                         final product = visibleProducts[i];
                         final isSelected = _selectedProductIds.contains(product.id);
                         Color statusColor = product.daysLeft < 3 ? Colors.orange : Colors.green;
-                        String timeLeftText = product.daysLeft < 30
-                            ? "${product.daysLeft} ${AppText.get('u_days')}"
-                            : "${(product.daysLeft / 30).floor()} ${AppText.get('u_months')}";
+                        String timeLeftText = product.daysLeft < 30 ? "${product.daysLeft} ${AppText.get('u_days')}" : "${(product.daysLeft / 30).floor()} ${AppText.get('u_months')}";
                         final catData = appCategories.firstWhere((c) => c.id == product.category, orElse: () => appCategories[0]);
 
                         return SlideInAnimation(
                           delay: i * 50,
                           child: Card(
                             color: isSelected ? Colors.green.shade100 : cardColor,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                                side: isSelected ? const BorderSide(color: Colors.green, width: 2) : BorderSide.none),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: isSelected ? const BorderSide(color: Colors.green, width: 2) : BorderSide.none),
                             elevation: 4,
                             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             child: InkWell(
-                              onTap: () => _toggleSelection(product.id, product.name),
+                              onTap: () => _toggleSelection(product.id),
                               borderRadius: BorderRadius.circular(20),
                               child: Padding(
                                 padding: const EdgeInsets.all(12.0),
                                 child: ListTile(
                                   contentPadding: EdgeInsets.zero,
-                                  leading: Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(color: catData.color.withOpacity(0.15), shape: BoxShape.circle),
-                                    child: Icon(catData.icon, color: catData.color, size: 28),
-                                  ),
-                                  title: Row(children: [
-                                    Expanded(
-                                        child: Text(product.name,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isSelected ? Colors.black : textColor))),
-                                    const SizedBox(width: 8),
-                                    Text("(${product.quantity} ${AppText.get('u_${product.unit}')})",
-                                        style: const TextStyle(color: Colors.grey, fontSize: 14))
-                                  ]),
-                                  subtitle: Row(children: [
-                                    Icon(Icons.timer_outlined, size: 16, color: statusColor),
-                                    const SizedBox(width: 4),
-                                    Text(timeLeftText, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 14))
-                                  ]),
+                                  leading: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: catData.color.withOpacity(0.15), shape: BoxShape.circle), child: Icon(catData.icon, color: catData.color, size: 28)),
+                                  title: Row(children: [Expanded(child: Text(product.name, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isSelected ? Colors.black : textColor))), const SizedBox(width: 8), Text("(${product.quantity} ${AppText.get('u_${product.unit}')})", style: const TextStyle(color: Colors.grey, fontSize: 14))]),
+                                  subtitle: Row(children: [Icon(Icons.timer_outlined, size: 16, color: statusColor), const SizedBox(width: 4), Text(timeLeftText, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 14))]),
                                   trailing: PopupMenuButton<String>(
                                     icon: const Icon(Icons.more_vert, color: Colors.grey),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                                     color: cardColor,
                                     onSelected: (value) async {
-                                      if (value == 'edit') {
-                                        _showProductDialog(productToEdit: product, collection: collection);
-                                      } else if (value == 'shop') {
-                                        await shopListCollection.add({
-                                          'name': product.name,
-                                          'isBought': false,
-                                          'addedDate': Timestamp.now(),
-                                          'quantity': product.quantity,
-                                          'unit': product.unit
-                                        });
-                                        _deleteProductForever(product, collection);
-                                      } else if (value == 'eaten') {
-                                        _showConsumeDialog(product, collection);
-                                      } else if (value == 'delete') {
-                                        _confirmSoftDelete(product, collection);
-                                      }
+                                      if (value == 'edit') _showProductDialog(productToEdit: product, collection: collection);
+                                      else if (value == 'shop') { await shopListCollection.add({'name': product.name, 'isBought': false, 'addedDate': Timestamp.now(), 'quantity': product.quantity, 'unit': product.unit}); _deleteProductForever(product, collection); }
+                                      else if (value == 'eaten') _showConsumeDialog(product, collection);
+                                      else if (value == 'delete') _confirmSoftDelete(product, collection);
                                     },
                                     itemBuilder: (context) => [
                                       PopupMenuItem(value: 'edit', child: Row(children: [const Icon(Icons.edit, color: Colors.blue), const SizedBox(width: 10), Text(AppText.get('edit_product'), style: TextStyle(color: textColor))])),
@@ -876,35 +868,19 @@ class _FridgeContentState extends State<FridgeContent> {
                       },
                     ),
                   ),
-
-                  // 👇 РЕКЛАМНИЙ БАНЕР ВНИЗУ СПИСКУ
                   if (_bannerAd != null && _isBannerLoaded && !SubscriptionService().isPremium)
-                    Container(
-                        alignment: Alignment.center,
-                        width: _bannerAd!.size.width.toDouble(),
-                        height: _bannerAd!.size.height.toDouble(),
-                        child: AdWidget(ad: _bannerAd!)
-                    ),
+                    Container(alignment: Alignment.center, width: _bannerAd!.size.width.toDouble(), height: _bannerAd!.size.height.toDouble(), child: AdWidget(ad: _bannerAd!)),
                 ],
               ),
               floatingActionButton: _selectedProductIds.isNotEmpty
                   ? FloatingActionButton.extended(
-                  onPressed: _checkLimitAndSearch,
+                  onPressed: () => _checkLimitAndSearch(allProducts),
                   label: Text(AppText.get('cook_btn'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   icon: const Icon(Icons.restaurant_menu, size: 28),
                   backgroundColor: Colors.deepOrange,
                   foregroundColor: Colors.white,
                   elevation: 4)
-                  : SizedBox(
-                  width: 65,
-                  height: 65,
-                  child: FloatingActionButton(
-                      onPressed: () => _showProductDialog(collection: collection, productToEdit: null),
-                      backgroundColor: Colors.green.shade600,
-                      foregroundColor: Colors.white,
-                      elevation: 4,
-                      shape: const CircleBorder(),
-                      child: const Icon(Icons.add, size: 36))),
+                  : SizedBox(width: 65, height: 65, child: FloatingActionButton(onPressed: () => _showProductDialog(collection: collection, productToEdit: null), backgroundColor: Colors.green.shade600, foregroundColor: Colors.white, elevation: 4, shape: const CircleBorder(), child: const Icon(Icons.add, size: 36))),
             );
           },
         );
@@ -914,11 +890,19 @@ class _FridgeContentState extends State<FridgeContent> {
 
   Widget _filterChip(String id, String label, IconData icon, Color textColor, Color bgColor) {
     final isSelected = _selectedCategoryFilter == id;
-    return Padding(padding: const EdgeInsets.only(right: 10), child: InkWell(onTap: () => setState(() => _selectedCategoryFilter = id), borderRadius: BorderRadius.circular(20), child: AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(color: isSelected ? Colors.green : (bgColor), borderRadius: BorderRadius.circular(20), border: Border.all(color: isSelected ? Colors.green : Colors.grey.shade300), boxShadow: isSelected ? [BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 3))] : []), child: Row(children: [Icon(icon, size: 18, color: isSelected ? Colors.white : Colors.grey), const SizedBox(width: 8), Text(label, style: TextStyle(color: isSelected ? Colors.white : textColor, fontWeight: FontWeight.bold))]))));
+    return Padding(
+        padding: const EdgeInsets.only(right: 10),
+        child: InkWell(
+            onTap: () => setState(() => _selectedCategoryFilter = id),
+            borderRadius: BorderRadius.circular(20),
+            child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(color: isSelected ? Colors.green : (bgColor), borderRadius: BorderRadius.circular(20), border: Border.all(color: isSelected ? Colors.green : Colors.grey.shade300), boxShadow: isSelected ? [BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 3))] : []),
+                child: Row(children: [Icon(icon, size: 18, color: isSelected ? Colors.white : Colors.grey), const SizedBox(width: 8), Text(label, style: TextStyle(color: isSelected ? Colors.white : textColor, fontWeight: FontWeight.bold))]))));
   }
 }
 
-// 👇 КЛАС АНІМАЦІЇ (ОКРЕМО, ВНИЗУ)
 class SlideInAnimation extends StatefulWidget {
   final Widget child;
   final int delay;
@@ -937,12 +921,7 @@ class _SlideInAnimationState extends State<SlideInAnimation> with SingleTickerPr
     Future.delayed(Duration(milliseconds: widget.delay), () { if(mounted) _controller.forward(); });
   }
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  void dispose() { _controller.dispose(); super.dispose(); }
   @override
-  Widget build(BuildContext context) {
-    return FadeTransition(opacity: _controller, child: SlideTransition(position: _offsetAnim, child: widget.child));
-  }
+  Widget build(BuildContext context) { return FadeTransition(opacity: _controller, child: SlideTransition(position: _offsetAnim, child: widget.child)); }
 }

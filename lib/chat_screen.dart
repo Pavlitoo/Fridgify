@@ -42,8 +42,6 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _recordedFilePath;
 
   Map<String, String>? _replyMessage;
-
-  // 👇 Глобальний кеш для картинок в межах екрану
   static final Map<String, Uint8List> _imageCache = {};
 
   @override
@@ -96,10 +94,14 @@ class _ChatScreenState extends State<ChatScreen> {
     _msgController.clear();
   }
 
+  // 🔥 ВИПРАВЛЕНО (ПЕРЕКЛАД ВКЛАДОК)
   void _showMessageDetails(BuildContext context, List<dynamic> readBy, List<dynamic> likes) {
     showModalBottomSheet(context: context, backgroundColor: Theme.of(context).cardTheme.color, isScrollControlled: true, builder: (ctx) {
       return DraggableScrollableSheet(initialChildSize: 0.5, expand: false, builder: (context, scrollController) {
-        return DefaultTabController(length: 2, child: Column(children: [const TabBar(tabs: [Tab(text: "Переглянули"), Tab(text: "Вподобали")]), Expanded(child: TabBarView(children: [_buildUserList(readBy, "Ще ніхто не переглянув"), _buildUserList(likes, "Ще ніхто не вподобав")]))]));
+        return DefaultTabController(length: 2, child: Column(children: [
+          TabBar(tabs: [Tab(text: AppText.get('chat_viewed_by')), Tab(text: AppText.get('chat_liked_by'))]),
+          Expanded(child: TabBarView(children: [_buildUserList(readBy, AppText.get('chat_no_views')), _buildUserList(likes, AppText.get('chat_no_likes'))]))
+        ]));
       });
     },
     );
@@ -110,17 +112,19 @@ class _ChatScreenState extends State<ChatScreen> {
     return ListView.builder(itemCount: userIds.length, itemBuilder: (context, index) {
       String uid = userIds[index];
       return FutureBuilder<DocumentSnapshot>(future: FirebaseFirestore.instance.collection('users').doc(uid).get(), builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) return const ListTile(leading: CircularProgressIndicator(), title: Text("Завантаження..."));
+        if (snap.connectionState == ConnectionState.waiting) return const ListTile(leading: CircularProgressIndicator(), title: Text("..."));
         if (!snap.hasData) return const SizedBox();
         var data = snap.data!.data() as Map<String, dynamic>?;
         String name = data?['displayName'] ?? 'User';
-        if (uid == user.uid) name += " (Я)";
+        // 🔥 ВИПРАВЛЕНО (СУФІКС "Я")
+        if (uid == user.uid) name += AppText.get('suffix_me');
         return ListTile(leading: const CircleAvatar(child: Icon(Icons.person)), title: Text(name));
       });
     },
     );
   }
 
+  // 🔥 ВИПРАВЛЕНО (МЕНЮ ЧАТУ)
   void _showMsgOptions(BuildContext context, DocumentSnapshot doc, bool isMe) {
     final data = doc.data() as Map<String, dynamic>;
     final bool hasText = data['text'] != null && data['text'].toString().isNotEmpty;
@@ -129,17 +133,24 @@ class _ChatScreenState extends State<ChatScreen> {
 
     showModalBottomSheet(context: context, backgroundColor: Theme.of(context).cardTheme.color, builder: (ctx) {
       return Wrap(children: [
-        ListTile(leading: const Icon(Icons.reply, color: Colors.blue), title: const Text("Відповісти"), onTap: () { Navigator.pop(ctx); setState(() { String txt = data['text'] ?? (data['audioBase64'] != null ? "Голосове повідомлення" : "Фото"); _replyMessage = {'text': txt, 'sender': data['senderName'] ?? 'User'}; }); }),
-        ListTile(leading: const Icon(Icons.info_outline, color: Colors.blue), title: const Text("Інформація"), onTap: () { Navigator.pop(ctx); _showMessageDetails(context, readBy, likes); }),
-        if (isMe && hasText) ListTile(leading: const Icon(Icons.edit, color: Colors.blue), title: const Text("Редагувати"), onTap: () { Navigator.pop(ctx); setState(() { _editingMsgId = doc.id; _msgController.text = data['text']; }); }),
-        if (isMe) ListTile(leading: const Icon(Icons.delete, color: Colors.red), title: const Text("Видалити"), onTap: () { Navigator.pop(ctx); _confirmDelete(doc.id); }),
+        ListTile(leading: const Icon(Icons.reply, color: Colors.blue), title: Text(AppText.get('chat_reply')), onTap: () { Navigator.pop(ctx); setState(() { String txt = data['text'] ?? (data['audioBase64'] != null ? "Voice" : "Image"); _replyMessage = {'text': txt, 'sender': data['senderName'] ?? 'User'}; }); }),
+        ListTile(leading: const Icon(Icons.info_outline, color: Colors.blue), title: Text(AppText.get('chat_info')), onTap: () { Navigator.pop(ctx); _showMessageDetails(context, readBy, likes); }),
+        if (isMe && hasText) ListTile(leading: const Icon(Icons.edit, color: Colors.blue), title: Text(AppText.get('chat_edit')), onTap: () { Navigator.pop(ctx); setState(() { _editingMsgId = doc.id; _msgController.text = data['text']; }); }),
+        if (isMe) ListTile(leading: const Icon(Icons.delete, color: Colors.red), title: Text(AppText.get('chat_delete')), onTap: () { Navigator.pop(ctx); _confirmDelete(doc.id); }),
       ]);
     },
     );
   }
 
+  // 🔥 ВИПРАВЛЕНО (ДІАЛОГ ВИДАЛЕННЯ)
   void _confirmDelete(String msgId) {
-    showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("Видалити?"), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Ні")), TextButton(onPressed: () { Navigator.pop(ctx); _chatService.deleteMessage(widget.chatId, msgId, isDirect: widget.isDirect); }, child: const Text("Так", style: TextStyle(color: Colors.red)))]));
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+        title: Text(AppText.get('dialog_delete_title')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppText.get('btn_no'))),
+          TextButton(onPressed: () { Navigator.pop(ctx); _chatService.deleteMessage(widget.chatId, msgId, isDirect: widget.isDirect); }, child: Text(AppText.get('btn_yes'), style: const TextStyle(color: Colors.red)))
+        ]
+    ));
   }
 
   Future<void> _pickAndSendImage() async {
@@ -157,7 +168,7 @@ class _ChatScreenState extends State<ChatScreen> {
       String path = '${tempDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.aac';
       await _recorder!.startRecorder(toFile: path);
       setState(() { _isRecording = true; _recordedFilePath = path; });
-    } catch (e) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Помилка мікрофону"), backgroundColor: Colors.red)); }
+    } catch (e) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Mic Error"), backgroundColor: Colors.red)); }
   }
 
   Future<void> _stopRecording() async {
@@ -231,7 +242,6 @@ class _ChatScreenState extends State<ChatScreen> {
       appBar: AppBar(
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(widget.chatTitle ?? AppText.get('chat_title'), style: TextStyle(fontSize: 18, color: textColor)),
-          // 👇 ВИПРАВЛЕНО: ТЕПЕР ТУТ ПЕРЕКЛАД
           if (widget.isDirect) Text(AppText.get('chat_personal'), style: const TextStyle(fontSize: 12, color: Colors.grey)),
         ]),
         backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
@@ -249,7 +259,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
                     final docs = snapshot.data!.docs;
 
-                    // 👇 ВИПРАВЛЕНО: ТЕПЕР ТУТ ПЕРЕКЛАД
                     if (docs.isEmpty) return Center(child: Text(AppText.get('chat_no_messages'), style: TextStyle(color: Colors.grey.shade500)));
 
                     return ListView.builder(
@@ -325,7 +334,7 @@ class _ChatScreenState extends State<ChatScreen> {
           child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(base64Decode(data['imageBase64']), height: 200, fit: BoxFit.cover, gaplessPlayback: true))
       );
     }
-    else if (data['audioBase64'] != null) { bool isPlaying = _playingMsgId == msgId; content = Row(mainAxisSize: MainAxisSize.min, children: [GestureDetector(onTap: () => _playAudio(data['audioBase64'], msgId), child: CircleAvatar(radius: 20, backgroundColor: isMe ? Colors.green.shade900 : Colors.green, child: Icon(isPlaying ? Icons.stop : Icons.play_arrow, color: Colors.white))), const SizedBox(width: 10), Expanded(child: Container(height: 4, decoration: BoxDecoration(color: isMe ? Colors.white54 : Colors.grey.shade400, borderRadius: BorderRadius.circular(2)))), const SizedBox(width: 10), Text(isPlaying ? "Грає..." : "Голос", style: TextStyle(fontSize: 12, color: bubbleTextColor.withOpacity(0.7)))]); }
+    else if (data['audioBase64'] != null) { bool isPlaying = _playingMsgId == msgId; content = Row(mainAxisSize: MainAxisSize.min, children: [GestureDetector(onTap: () => _playAudio(data['audioBase64'], msgId), child: CircleAvatar(radius: 20, backgroundColor: isMe ? Colors.green.shade900 : Colors.green, child: Icon(isPlaying ? Icons.stop : Icons.play_arrow, color: Colors.white))), const SizedBox(width: 10), Expanded(child: Container(height: 4, decoration: BoxDecoration(color: isMe ? Colors.white54 : Colors.grey.shade400, borderRadius: BorderRadius.circular(2)))), const SizedBox(width: 10), Text(isPlaying ? "Playing..." : "Voice", style: TextStyle(fontSize: 12, color: bubbleTextColor.withOpacity(0.7)))]); }
     else { content = Text(data['text'] ?? '', style: TextStyle(fontSize: 16, color: bubbleTextColor)); }
 
     Widget? replyWidget;
@@ -367,7 +376,7 @@ class _ChatScreenState extends State<ChatScreen> {
         const SizedBox(height: 4),
         Align(alignment: Alignment.bottomRight, child: Row(mainAxisSize: MainAxisSize.min, children: [
           if (isLiked) ...[const Icon(Icons.favorite, size: 12, color: Colors.redAccent), const SizedBox(width: 2), Text("${likes.length}", style: TextStyle(fontSize: 10, color: Colors.redAccent)), const SizedBox(width: 4)],
-          if (isEdited) Text("ред. ", style: TextStyle(fontSize: 9, color: bubbleTextColor.withOpacity(0.5))),
+          if (isEdited) Text("ed. ", style: TextStyle(fontSize: 9, color: bubbleTextColor.withOpacity(0.5))),
           Text(time, style: TextStyle(fontSize: 10, color: bubbleTextColor.withOpacity(0.7))),
           if (isMe) ...[const SizedBox(width: 4), Icon(isReadByOthers ? Icons.done_all : Icons.check, size: 14, color: isReadByOthers ? Colors.blueAccent : Colors.white70)]
         ])),
@@ -380,15 +389,15 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Column(
         children: [
           if (_replyMessage != null)
-            Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), color: isDark ? Colors.grey.shade900 : Colors.grey.shade200, child: Row(children: [const Icon(Icons.reply, color: Colors.green), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("Відповідь ${_replyMessage!['sender']}", style: TextStyle(fontWeight: FontWeight.bold, color: textColor)), Text(_replyMessage!['text']!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: textColor.withOpacity(0.7)))])), IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _replyMessage = null))])),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), color: isDark ? Colors.grey.shade900 : Colors.grey.shade200, child: Row(children: [const Icon(Icons.reply, color: Colors.green), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("Replying to ${_replyMessage!['sender']}", style: TextStyle(fontWeight: FontWeight.bold, color: textColor)), Text(_replyMessage!['text']!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: textColor.withOpacity(0.7)))])), IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _replyMessage = null))])),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             color: isDark ? const Color(0xFF1F1F1F) : Colors.white,
             child: Row(children: [
               if (_editingMsgId == null) IconButton(icon: const Icon(Icons.camera_alt), color: Colors.grey, onPressed: _pickAndSendImage) else IconButton(icon: const Icon(Icons.close), color: Colors.red, onPressed: () { setState(() { _editingMsgId = null; _msgController.clear(); }); }),
-              Expanded(child: Container(padding: const EdgeInsets.symmetric(horizontal: 16), decoration: BoxDecoration(color: isDark ? const Color(0xFF2C2C2C) : Colors.grey.shade100, borderRadius: BorderRadius.circular(24)), child: TextField(controller: _msgController, maxLines: 5, minLines: 1, style: TextStyle(color: textColor), decoration: InputDecoration(hintText: _editingMsgId != null ? "Редагування..." : AppText.get('chat_hint'), hintStyle: TextStyle(color: isDark ? Colors.grey : null), border: InputBorder.none, contentPadding: const EdgeInsets.symmetric(vertical: 10))))),
+              Expanded(child: Container(padding: const EdgeInsets.symmetric(horizontal: 16), decoration: BoxDecoration(color: isDark ? const Color(0xFF2C2C2C) : Colors.grey.shade100, borderRadius: BorderRadius.circular(24)), child: TextField(controller: _msgController, maxLines: 5, minLines: 1, style: TextStyle(color: textColor), decoration: InputDecoration(hintText: _editingMsgId != null ? "Editing..." : AppText.get('chat_hint'), hintStyle: TextStyle(color: isDark ? Colors.grey : null), border: InputBorder.none, contentPadding: const EdgeInsets.symmetric(vertical: 10))))),
               const SizedBox(width: 8),
-              GestureDetector(onLongPress: (_isTextEmpty && _editingMsgId == null) ? _startRecording : null, onLongPressUp: (_isTextEmpty && _editingMsgId == null) ? _stopRecording : null, onTap: _isTextEmpty && _editingMsgId == null ? () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Затисніть для запису 🎤"), duration: Duration(seconds: 1))) : _sendMessage, child: CircleAvatar(radius: 24, backgroundColor: _isRecording ? Colors.red : (_editingMsgId != null ? Colors.blue : const Color(0xFF00897B)), child: _isRecording ? const Icon(Icons.mic, color: Colors.white, size: 24) : Icon(_editingMsgId != null ? Icons.check : (_isTextEmpty ? Icons.mic_none : Icons.send), color: Colors.white, size: 24))),
+              GestureDetector(onLongPress: (_isTextEmpty && _editingMsgId == null) ? _startRecording : null, onLongPressUp: (_isTextEmpty && _editingMsgId == null) ? _stopRecording : null, onTap: _isTextEmpty && _editingMsgId == null ? () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Hold to record 🎤"), duration: Duration(seconds: 1))) : _sendMessage, child: CircleAvatar(radius: 24, backgroundColor: _isRecording ? Colors.red : (_editingMsgId != null ? Colors.blue : const Color(0xFF00897B)), child: _isRecording ? const Icon(Icons.mic, color: Colors.white, size: 24) : Icon(_editingMsgId != null ? Icons.check : (_isTextEmpty ? Icons.mic_none : Icons.send), color: Colors.white, size: 24))),
             ]),
           ),
         ],

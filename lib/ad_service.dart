@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart'; // Для роботи з датами
+import 'package:intl/intl.dart';
 import 'subscription_service.dart';
-import 'premium_screen.dart'; // Щоб відкривати екран преміуму з діалогу
+import 'premium_screen.dart';
+import 'translations.dart'; // ✅ Імпорт перекладів
+import 'secrets.dart'; // ✅ Імпорт секретів (твоїх ID)
 
 class AdService {
   static final AdService _instance = AdService._internal();
@@ -17,22 +19,25 @@ class AdService {
   InterstitialAd? _interstitialAd;
   bool _isAdLoaded = false;
 
-  // 👇 ТВОЇ РЕАЛЬНІ ID
-  final String _realBannerId = 'ca-app-pub-9946334990188142/1828107398';
-  final String _realInterstitialId = 'ca-app-pub-9946334990188142/5585026173';
-
-  // 👇 ТЕСТОВІ ID
-  final String _testBannerId = 'ca-app-pub-3940256099942544/6300978111';
-  final String _testInterstitialId = 'ca-app-pub-3940256099942544/1033173712';
-
+  // 👇 Беремо ID з secrets.dart або використовуємо тестові
   String get bannerAdUnitId {
-    if (kReleaseMode) return _realBannerId;
-    return Platform.isAndroid ? _testBannerId : 'ca-app-pub-3940256099942544/2934735716';
+    if (kReleaseMode) {
+      // Тут можеш додати Secrets.bannerAdUnitId, якщо він там є
+      return 'ca-app-pub-9946334990188142/1828107398';
+    }
+    return Platform.isAndroid
+        ? 'ca-app-pub-3940256099942544/6300978111'
+        : 'ca-app-pub-3940256099942544/2934735716';
   }
 
   String get interstitialAdUnitId {
-    if (kReleaseMode) return _realInterstitialId;
-    return Platform.isAndroid ? _testInterstitialId : 'ca-app-pub-3940256099942544/4411468910';
+    if (kReleaseMode) {
+      // Тут можеш додати Secrets.interstitialAdUnitId, якщо він там є
+      return 'ca-app-pub-9946334990188142/5585026173';
+    }
+    return Platform.isAndroid
+        ? 'ca-app-pub-3940256099942544/1033173712'
+        : 'ca-app-pub-3940256099942544/4411468910';
   }
 
   Future<void> init() async {
@@ -60,9 +65,8 @@ class AdService {
     );
   }
 
-  // --- 🔥 ГОЛОВНА ЛОГІКА З FIREBASE ---
+  // --- 🔥 ЛОГІКА ЛІМІТІВ (FIREBASE) ---
 
-  // 1. Отримуємо поточний лічильник з бази
   Future<int> _getDailySearchCount() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return 0;
@@ -74,12 +78,10 @@ class AdService {
       final doc = await docRef.get();
       if (doc.exists) {
         final data = doc.data()!;
-        // Якщо дата в базі співпадає з сьогоднішньою - повертаємо count
         if (data['date'] == todayStr) {
           return data['count'] ?? 0;
         }
       }
-      // Якщо документа немає або дата стара (вчорашня) - повертаємо 0
       return 0;
     } catch (e) {
       debugPrint("Error reading limit: $e");
@@ -87,7 +89,6 @@ class AdService {
     }
   }
 
-  // 2. Оновлюємо лічильник (+1)
   Future<void> _incrementSearchCount() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -102,7 +103,6 @@ class AdService {
         currentCount = doc.data()!['count'] ?? 0;
       }
 
-      // Записуємо нове значення
       await docRef.set({
         'date': todayStr,
         'count': currentCount + 1
@@ -112,52 +112,42 @@ class AdService {
     }
   }
 
-  // 3. Основна функція перевірки (викликається з кнопки)
   Future<bool> checkAndShowAd(BuildContext context) async {
-    // 1. Якщо Premium - пропускаємо миттєво
     if (SubscriptionService().isPremium) return true;
 
-    // 2. Читаємо з бази, скільки разів юзер вже шукав СЬОГОДНІ
     int searchCount = await _getDailySearchCount();
     debugPrint("🔎 Юзер шукав сьогодні: $searchCount разів");
 
-    // 3. БЛОКУВАННЯ: Якщо 10 або більше запитів (0..9 = 10 разів)
+    // Блокування після 10 спроб
     if (searchCount >= 10) {
-      _showLimitDialog(context);
-      return false; // Блокуємо пошук
+      _showLimitDialog(context); // 🔥 Тепер показує перекладений діалог
+      return false;
     }
 
-    // 4. ЛОГІКА РЕКЛАМИ:
-    // 0, 1, 2 (1-й, 2-й, 3-й запити) -> Без реклами
-    // 3 і більше (4-й...10-й) -> Реклама
-
+    // Реклама з 4-го запиту (індекс 3)
     if (searchCount >= 3) {
-      // Треба показати рекламу
       if (_isAdLoaded && _interstitialAd != null) {
-        debugPrint("🎬 Запуск відео-реклами (запит №${searchCount + 1})...");
+        debugPrint("🎬 Запуск відео-реклами...");
         final completer = Completer<bool>();
 
         _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
           onAdDismissedFullScreenContent: (ad) async {
             ad.dispose();
-            _loadInterstitialAd(); // Вантажимо наступну
-            // Збільшуємо лічильник тільки після перегляду
+            _loadInterstitialAd();
             await _incrementSearchCount();
-            completer.complete(true); // Дозволяємо йти далі
+            completer.complete(true);
           },
           onAdFailedToShowFullScreenContent: (ad, err) async {
             ad.dispose();
             _loadInterstitialAd();
-            // Якщо помилка показу, все одно зараховуємо і пускаємо
             await _incrementSearchCount();
             completer.complete(true);
           },
         );
 
         _interstitialAd!.show();
-        return completer.future; // Чекаємо закриття реклами
+        return completer.future;
       } else {
-        // Реклама не завантажилась - пускаємо, але лічильник крутимо
         debugPrint("⚠️ Реклама не готова, пропускаємо.");
         _loadInterstitialAd();
         await _incrementSearchCount();
@@ -165,26 +155,40 @@ class AdService {
       }
     }
 
-    // Якщо це 1-й, 2-й або 3-й запит (searchCount < 3) - просто збільшуємо лічильник і пускаємо
     await _incrementSearchCount();
     return true;
   }
 
+  // 🔥 ОНОВЛЕНИЙ ДІАЛОГ З ПЕРЕКЛАДАМИ
   void _showLimitDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Ліміт на сьогодні 🛑"),
-        content: const Text("Ви використали 10 безкоштовних пошуків.\nЩоб готувати без обмежень, перейдіть на Premium!"),
+        backgroundColor: Theme.of(ctx).cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Expanded(child: Text(AppText.get('limit_title'), style: const TextStyle(fontWeight: FontWeight.bold))), // ✅ Переклад
+            const SizedBox(width: 10),
+            const Icon(Icons.front_hand, color: Colors.red),
+          ],
+        ),
+        content: Text(
+          AppText.get('limit_content'), // ✅ Переклад
+          style: const TextStyle(fontSize: 16),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("OK")),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(AppText.get('btn_ok')), // ✅ Переклад
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
             onPressed: () {
               Navigator.pop(ctx);
               Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen()));
             },
-            child: const Text("Premium"),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
+            child: Text(AppText.get('btn_premium')), // ✅ Переклад
           )
         ],
       ),
