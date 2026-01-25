@@ -12,7 +12,28 @@
           "package_name": "com.pavlo.smart_fridge"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "751094617128-3fj47req0p09918mjl139pv2mc8925s2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.pavlo.smart_fridge",
+            "certificate_hash": "def49629fa5f555c8abd55d76d4606cf3460a300"
+          }
+        },
+        {
+          "client_id": "751094617128-4mu597mofvlne6k72s9s317gfdqdnsub.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.pavlo.smart_fridge",
+            "certificate_hash": "3c24be5db6c01a5fea93869892d6bfec01733ff4"
+          }
+        },
+        {
+          "client_id": "751094617128-qsa9qie4nlj7igldanrlhhanr38sccdu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCQNCHzn-0aMMHzmUH9RqZwidWXRpY_NjM"
@@ -20,7 +41,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "751094617128-qsa9qie4nlj7igldanrlhhanr38sccdu.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "751094617128-6r7ekt1dk3lghggc5bp1kv2au2auiri8.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.pavlo.smartFridge"
+              }
+            }
+          ]
         }
       }
     }

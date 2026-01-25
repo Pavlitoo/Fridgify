@@ -8,7 +8,7 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// 👇 1. Додаємо імпорти, щоб читати файл ключів
+// Імпорти для читання файлу ключів
 import java.util.Properties
         import java.io.FileInputStream
 
@@ -27,7 +27,7 @@ import java.util.Properties
                 jvmTarget = JavaVersion.VERSION_17.toString()
             }
 
-            // 👇 2. Завантажуємо дані з key.properties
+            // Завантажуємо дані з key.properties
             val keystoreProperties = Properties()
             val keystorePropertiesFile = rootProject.file("key.properties")
             if (keystorePropertiesFile.exists()) {
@@ -43,9 +43,11 @@ import java.util.Properties
                 targetSdk = flutter.targetSdkVersion
                 versionCode = flutter.versionCode
                 versionName = flutter.versionName
+
+                // 🔥 ВАЖЛИВО: Вмикаємо Multidex (щоб не було помилок збірки)
+                multiDexEnabled = true
             }
 
-            // 👇 3. Створюємо конфігурацію підпису (Release)
             signingConfigs {
                 create("release") {
                     keyAlias = keystoreProperties["keyAlias"] as String
@@ -57,7 +59,6 @@ import java.util.Properties
 
             buildTypes {
                 release {
-                    // 👇 4. Підключаємо створений підпис
                     signingConfig = signingConfigs.getByName("release")
                     // Налаштування стиснення (для Flutter зазвичай false)
                     isMinifyEnabled = false
@@ -68,6 +69,9 @@ import java.util.Properties
             dependencies {
                 implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22")
                 coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+
+                // 🔥 ВАЖЛИВО: Бібліотека Multidex
+                implementation("androidx.multidex:multidex:2.0.1")
             }
         }
 

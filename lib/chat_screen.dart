@@ -11,8 +11,12 @@ import 'package:flutter_sound/flutter_sound.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
+import 'package:googleapis_auth/auth_io.dart' as auth;
+
 import '../chat_service.dart';
 import '../translations.dart';
+import '../credentials.dart'; // ✅ Імпорт файлу з ключами
 
 class ChatScreen extends StatefulWidget {
   final String chatId;
@@ -67,7 +71,7 @@ class _ChatScreenState extends State<ChatScreen> {
         android: AudioContextAndroid(isSpeakerphoneOn: true, stayAwake: true, contentType: AndroidContentType.music, usageType: AndroidUsageType.media, audioFocus: AndroidAudioFocus.gain),
         iOS: AudioContextIOS(category: AVAudioSessionCategory.playAndRecord, options: {AVAudioSessionOptions.defaultToSpeaker, AVAudioSessionOptions.allowBluetooth}),
       ));
-    } catch (e) { print("Audio err: $e"); }
+    } catch (e) { debugPrint("Audio err: $e"); }
   }
 
   @override
@@ -88,13 +92,18 @@ class _ChatScreenState extends State<ChatScreen> {
       _chatService.editMessage(widget.chatId, _editingMsgId!, text, isDirect: widget.isDirect);
       setState(() { _editingMsgId = null; });
     } else {
+      String? replyToName = _replyMessage?['sender'];
+
       _chatService.sendMessage(widget.chatId, text, isDirect: widget.isDirect, replyToText: _replyMessage?['text'], replyToSender: _replyMessage?['sender']);
+
+      // 🔥 Передаємо ім'я для push-сповіщення
+      _notifyRecipients(text, replyToName: replyToName);
+
       setState(() => _replyMessage = null);
     }
     _msgController.clear();
   }
 
-  // 🔥 ВИПРАВЛЕНО (ПЕРЕКЛАД ВКЛАДОК)
   void _showMessageDetails(BuildContext context, List<dynamic> readBy, List<dynamic> likes) {
     showModalBottomSheet(context: context, backgroundColor: Theme.of(context).cardTheme.color, isScrollControlled: true, builder: (ctx) {
       return DraggableScrollableSheet(initialChildSize: 0.5, expand: false, builder: (context, scrollController) {
@@ -116,7 +125,6 @@ class _ChatScreenState extends State<ChatScreen> {
         if (!snap.hasData) return const SizedBox();
         var data = snap.data!.data() as Map<String, dynamic>?;
         String name = data?['displayName'] ?? 'User';
-        // 🔥 ВИПРАВЛЕНО (СУФІКС "Я")
         if (uid == user.uid) name += AppText.get('suffix_me');
         return ListTile(leading: const CircleAvatar(child: Icon(Icons.person)), title: Text(name));
       });
@@ -124,7 +132,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // 🔥 ВИПРАВЛЕНО (МЕНЮ ЧАТУ)
   void _showMsgOptions(BuildContext context, DocumentSnapshot doc, bool isMe) {
     final data = doc.data() as Map<String, dynamic>;
     final bool hasText = data['text'] != null && data['text'].toString().isNotEmpty;
@@ -142,7 +149,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // 🔥 ВИПРАВЛЕНО (ДІАЛОГ ВИДАЛЕННЯ)
   void _confirmDelete(String msgId) {
     showDialog(context: context, builder: (ctx) => AlertDialog(
         title: Text(AppText.get('dialog_delete_title')),
@@ -159,6 +165,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (image == null) return;
     setState(() => _isUploading = true);
     await _chatService.sendImage(widget.chatId, File(image.path), isDirect: widget.isDirect);
+    _notifyRecipients("📷 Надіслав фото");
     setState(() => _isUploading = false);
   }
 
@@ -177,6 +184,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_recordedFilePath != null) {
       setState(() => _isUploading = true);
       await _chatService.sendVoice(widget.chatId, _recordedFilePath!, isDirect: widget.isDirect);
+      _notifyRecipients("🎤 Голосове повідомлення");
       setState(() => _isUploading = false);
     }
   }
@@ -200,26 +208,20 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildSmartAvatar(Map<String, dynamic> data) {
     String senderId = data['senderId'];
     String? localAvatar = data['senderAvatar'];
-
-    if (_imageCache.containsKey(senderId)) {
-      return CircleAvatar(backgroundImage: MemoryImage(_imageCache[senderId]!), radius: 18);
-    }
-
+    if (_imageCache.containsKey(senderId)) return CircleAvatar(backgroundImage: MemoryImage(_imageCache[senderId]!), radius: 18);
     if (localAvatar != null && localAvatar.isNotEmpty) {
       try {
         Uint8List bytes = base64Decode(localAvatar);
         _imageCache[senderId] = bytes;
         return CircleAvatar(backgroundImage: MemoryImage(bytes), radius: 18);
-      } catch (e) { /* ignore error */ }
+      } catch (e) { /* ignore */ }
     }
-
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance.collection('users').doc(senderId).get(),
       builder: (context, snapshot) {
         if (snapshot.hasData && snapshot.data != null) {
           final userData = snapshot.data!.data() as Map<String, dynamic>?;
           final liveAvatar = userData?['avatar_base64'];
-
           if (liveAvatar != null && liveAvatar.isNotEmpty) {
             try {
               Uint8List bytes = base64Decode(liveAvatar);
@@ -258,7 +260,6 @@ class _ChatScreenState extends State<ChatScreen> {
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
                     final docs = snapshot.data!.docs;
-
                     if (docs.isEmpty) return Center(child: Text(AppText.get('chat_no_messages'), style: TextStyle(color: Colors.grey.shade500)));
 
                     return ListView.builder(
@@ -269,18 +270,18 @@ class _ChatScreenState extends State<ChatScreen> {
                         bool isMe = data['senderId'] == user.uid;
                         bool isSameUser = false;
                         if (index < docs.length - 1) { final prev = docs[index + 1].data() as Map<String, dynamic>; if (prev['senderId'] == data['senderId']) isSameUser = true; }
-
                         List<dynamic> likes = data['likes'] ?? [];
                         bool isLiked = likes.contains(user.uid);
-
                         return GestureDetector(
                           onLongPress: () => _showMsgOptions(context, docs[index], isMe),
-                          onDoubleTap: () => _chatService.toggleLikeMessage(widget.chatId, docs[index].id, isLiked, isDirect: widget.isDirect),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 500),
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: _buildMessageRow(data, isMe, docs[index].id, isSameUser, isDark),
-                          ),
+                          // 🔥 ЛАЙК ПОВІДОМЛЕННЯ
+                          onDoubleTap: () {
+                            _chatService.toggleLikeMessage(widget.chatId, docs[index].id, isLiked, isDirect: widget.isDirect);
+                            if (!isLiked && !isMe) {
+                              _notifyLike(data['senderId'], data['text'] ?? 'повідомлення');
+                            }
+                          },
+                          child: AnimatedContainer(duration: const Duration(milliseconds: 500), padding: const EdgeInsets.symmetric(vertical: 2), child: _buildMessageRow(data, isMe, docs[index].id, isSameUser, isDark)),
                         );
                       },
                     );
@@ -321,59 +322,26 @@ class _ChatScreenState extends State<ChatScreen> {
     Widget content;
     final bubbleTextColor = isMe ? Colors.white : (isDark ? Colors.white : Colors.black87);
     final bubbleColor = isMe ? const Color(0xFF00897B) : (isDark ? const Color(0xFF1F1F1F) : Colors.white);
-
     bool isEdited = data['isEdited'] == true;
     List<dynamic> readBy = data['readBy'] ?? [];
     bool isReadByOthers = readBy.any((id) => id != user.uid);
     List<dynamic> likes = data['likes'] ?? [];
     bool isLiked = likes.isNotEmpty;
 
-    if (data['imageBase64'] != null) {
-      content = GestureDetector(
-          onTap: () => showDialog(context: context, builder: (_) => Dialog(backgroundColor: Colors.transparent, child: InteractiveViewer(child: Image.memory(base64Decode(data['imageBase64']))))),
-          child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(base64Decode(data['imageBase64']), height: 200, fit: BoxFit.cover, gaplessPlayback: true))
-      );
-    }
+    if (data['imageBase64'] != null) { content = GestureDetector(onTap: () => showDialog(context: context, builder: (_) => Dialog(backgroundColor: Colors.transparent, child: InteractiveViewer(child: Image.memory(base64Decode(data['imageBase64']))))), child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(base64Decode(data['imageBase64']), height: 200, fit: BoxFit.cover, gaplessPlayback: true))); }
     else if (data['audioBase64'] != null) { bool isPlaying = _playingMsgId == msgId; content = Row(mainAxisSize: MainAxisSize.min, children: [GestureDetector(onTap: () => _playAudio(data['audioBase64'], msgId), child: CircleAvatar(radius: 20, backgroundColor: isMe ? Colors.green.shade900 : Colors.green, child: Icon(isPlaying ? Icons.stop : Icons.play_arrow, color: Colors.white))), const SizedBox(width: 10), Expanded(child: Container(height: 4, decoration: BoxDecoration(color: isMe ? Colors.white54 : Colors.grey.shade400, borderRadius: BorderRadius.circular(2)))), const SizedBox(width: 10), Text(isPlaying ? "Playing..." : "Voice", style: TextStyle(fontSize: 12, color: bubbleTextColor.withOpacity(0.7)))]); }
     else { content = Text(data['text'] ?? '', style: TextStyle(fontSize: 16, color: bubbleTextColor)); }
 
     Widget? replyWidget;
-    if (data['replyToText'] != null) {
-      replyWidget = Container(
-        margin: const EdgeInsets.only(bottom: 5),
-        padding: const EdgeInsets.all(5),
-        decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(8), border: const Border(left: BorderSide(color: Colors.green, width: 3))),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(data['replyToSender'] ?? "User", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: bubbleTextColor.withOpacity(0.8))),
-          Text(data['replyToText'], maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: bubbleTextColor.withOpacity(0.7))),
-        ]),
-      );
-    }
+    if (data['replyToText'] != null) { replyWidget = Container(margin: const EdgeInsets.only(bottom: 5), padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(8), border: const Border(left: BorderSide(color: Colors.green, width: 3))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(data['replyToSender'] ?? "User", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: bubbleTextColor.withOpacity(0.8))), Text(data['replyToText'], maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: bubbleTextColor.withOpacity(0.7))) ])); }
 
     return Container(
       constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.65),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: bubbleColor,
-        borderRadius: BorderRadius.only(topLeft: const Radius.circular(16), topRight: const Radius.circular(16), bottomLeft: isMe ? const Radius.circular(16) : const Radius.circular(2), bottomRight: isMe ? const Radius.circular(2) : const Radius.circular(16)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 2, offset: const Offset(0, 1))],
-      ),
+      decoration: BoxDecoration(color: bubbleColor, borderRadius: BorderRadius.only(topLeft: const Radius.circular(16), topRight: const Radius.circular(16), bottomLeft: isMe ? const Radius.circular(16) : const Radius.circular(2), bottomRight: isMe ? const Radius.circular(2) : const Radius.circular(16)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 2, offset: const Offset(0, 1))]),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-        if (!isMe)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Row(
-              children: [
-                _buildSmartAvatar(data),
-                const SizedBox(width: 8),
-                Text(data['senderName']??'', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade800, fontSize: 14)),
-              ],
-            ),
-          ),
-
-        if (replyWidget != null) replyWidget,
-        content,
-        const SizedBox(height: 4),
+        if (!isMe) Padding(padding: const EdgeInsets.only(bottom: 4), child: Row(children: [_buildSmartAvatar(data), const SizedBox(width: 8), Text(data['senderName']??'', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade800, fontSize: 14))])),
+        if (replyWidget != null) replyWidget, content, const SizedBox(height: 4),
         Align(alignment: Alignment.bottomRight, child: Row(mainAxisSize: MainAxisSize.min, children: [
           if (isLiked) ...[const Icon(Icons.favorite, size: 12, color: Colors.redAccent), const SizedBox(width: 2), Text("${likes.length}", style: TextStyle(fontSize: 10, color: Colors.redAccent)), const SizedBox(width: 4)],
           if (isEdited) Text("ed. ", style: TextStyle(fontSize: 9, color: bubbleTextColor.withOpacity(0.5))),
@@ -388,8 +356,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return SafeArea(
       child: Column(
         children: [
-          if (_replyMessage != null)
-            Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), color: isDark ? Colors.grey.shade900 : Colors.grey.shade200, child: Row(children: [const Icon(Icons.reply, color: Colors.green), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("Replying to ${_replyMessage!['sender']}", style: TextStyle(fontWeight: FontWeight.bold, color: textColor)), Text(_replyMessage!['text']!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: textColor.withOpacity(0.7)))])), IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _replyMessage = null))])),
+          if (_replyMessage != null) Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), color: isDark ? Colors.grey.shade900 : Colors.grey.shade200, child: Row(children: [const Icon(Icons.reply, color: Colors.green), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("${AppText.get('notif_reply_to')} ${_replyMessage!['sender']}", style: TextStyle(fontWeight: FontWeight.bold, color: textColor)), Text(_replyMessage!['text']!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: textColor.withOpacity(0.7)))])), IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _replyMessage = null))])),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             color: isDark ? const Color(0xFF1F1F1F) : Colors.white,
@@ -403,5 +370,129 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
     );
+  }
+
+  // ==============================================================================
+  // 🔥🔥🔥 ОНОВЛЕНА ЛОГІКА З APPTEXT ТА CREDENTIALS 🔥🔥🔥
+  // ==============================================================================
+
+  Future<void> _notifyRecipients(String messageText, {String? replyToName}) async {
+    try {
+      final myDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final myName = myDoc.data()?['displayName'] ?? AppText.get('notif_new_msg');
+
+      String notificationType = widget.isDirect ? 'private_chat' : 'family_chat';
+      String targetChatId = widget.chatId;
+
+      // 🔥 Формуємо перекладений заголовок і текст
+      String title = widget.isDirect ? myName : "${AppText.get('notif_family')}: $myName";
+      String body = messageText;
+
+      if (replyToName != null) {
+        body = "${AppText.get('notif_reply_to')} $replyToName: $messageText";
+      }
+
+      if (widget.isDirect) {
+        String receiverId = '';
+        if (widget.chatId.contains('_')) {
+          final parts = widget.chatId.split('_');
+          if (parts.length == 2) {
+            if (parts[0] == user.uid) { receiverId = parts[1]; }
+            else if (parts[1] == user.uid) { receiverId = parts[0]; }
+          }
+        }
+        if (receiverId.isEmpty) {
+          final chatDoc = await FirebaseFirestore.instance.collection('chats').doc(widget.chatId).get();
+          if (chatDoc.exists) {
+            final participants = List<String>.from(chatDoc.data()?['participants'] ?? []);
+            receiverId = participants.firstWhere((id) => id != user.uid, orElse: () => '');
+          }
+        }
+
+        if (receiverId.isNotEmpty) {
+          final receiverDoc = await FirebaseFirestore.instance.collection('users').doc(receiverId).get();
+          final token = receiverDoc.data()?['fcmToken'];
+          if (token != null) {
+            await _sendPushV1(token, title, body, notificationType, targetChatId);
+          }
+        }
+      } else {
+        String? householdId = myDoc.data()?['householdId'];
+        if (householdId != null) {
+          final familyMembers = await FirebaseFirestore.instance.collection('users').where('householdId', isEqualTo: householdId).get();
+          for (var doc in familyMembers.docs) {
+            if (doc.id == user.uid) continue;
+            final token = doc.data()['fcmToken'];
+            if (token != null) {
+              _sendPushV1(token, title, body, notificationType, targetChatId);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("❌ [PUSH] Error: $e");
+    }
+  }
+
+  Future<void> _notifyLike(String messageSenderId, String messageText) async {
+    try {
+      final myDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final myName = myDoc.data()?['displayName'] ?? AppText.get('notif_someone');
+
+      final senderDoc = await FirebaseFirestore.instance.collection('users').doc(messageSenderId).get();
+      final token = senderDoc.data()?['fcmToken'];
+
+      if (token != null) {
+        String shortText = messageText.length > 20 ? '${messageText.substring(0, 20)}...' : messageText;
+
+        // 🔥 Перекладений текст лайку
+        String title = "❤️ $myName ${AppText.get('notif_liked')}:";
+        String body = "\"$shortText\"";
+
+        String notificationType = widget.isDirect ? 'private_chat' : 'family_chat';
+
+        await _sendPushV1(token, title, body, notificationType, widget.chatId);
+      }
+    } catch (e) {
+      debugPrint("❌ Like push error: $e");
+    }
+  }
+
+  Future<void> _sendPushV1(String token, String title, String body, String type, String chatId) async {
+    try {
+      // ✅ БЕРЕМО КЛЮЧІ З ОКРЕМОГО ФАЙЛУ
+      final accountCredentials = auth.ServiceAccountCredentials.fromJson(googleServiceAccount);
+
+      final scopes = ['https://www.googleapis.com/auth/firebase.messaging'];
+      final client = await auth.clientViaServiceAccount(accountCredentials, scopes);
+
+      final response = await client.post(
+        Uri.parse('https://fcm.googleapis.com/v1/projects/${googleServiceAccount['project_id']}/messages:send'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'message': {
+            'token': token,
+            'notification': {
+              'title': title,
+              'body': body,
+            },
+            'data': {
+              'type': type,
+              'chatId': chatId,
+              'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+            },
+          },
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        debugPrint("🎉 [PUSH V1] Send Success!");
+      } else {
+        debugPrint("💀 [PUSH V1] Error: ${response.body}");
+      }
+      client.close();
+    } catch (e) {
+      debugPrint("❌ [PUSH V1] Exception: $e");
+    }
   }
 }

@@ -8,69 +8,54 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+// import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // ❌ Прибираємо, щоб не плутати з нашим сервісом
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // 👇 ОБОВ'ЯЗКОВО
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firebase_options.dart';
 import 'translations.dart';
 import 'notification_service.dart';
+import 'fcm_service.dart'; // 👇 Додай імпорт нового файлу
 import 'subscription_service.dart';
 import 'ad_service.dart';
-import 'global.dart'; // Тут лежать themeNotifier
+import 'global.dart';
 
-// 👇 Перевір назви своїх файлів
-import 'screens/auth_screen.dart'; // Або login_screen.dart
+import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
-
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
 int globalTabIndex = 0;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Завантаження .env (ігноруємо помилку, якщо файлу немає в релізі)
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {
     debugPrint("⚠️ Warning: .env file problem: $e");
   }
 
-  // 2. Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // 3. Сервіси
+  // Ініціалізація сервісів
   await NotificationService.init();
+  await FCMService().init(); // 🔥 Ініціалізація FCM
   await SubscriptionService().init();
 
   if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
     await MobileAds.instance.initialize();
   }
 
-  // 4. Сповіщення
-  const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-
-  // 🔥 5. ГОЛОВНЕ ВИПРАВЛЕННЯ: Читаємо тему з пам'яті ПЕРЕД запуском
+  // Налаштування теми та мови
   final prefs = await SharedPreferences.getInstance();
-
-  // Читаємо тему (якщо немає запису, то false = світла)
   final bool isDark = prefs.getBool('is_dark_mode') ?? false;
-
-  // Читаємо мову
   final String savedLang = prefs.getString('language') ?? 'English';
 
-  // Встановлюємо глобальні змінні
   themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
   languageNotifier.value = savedLang;
 
-  // 6. Запускаємо додаток
   runApp(const SmartFridgeApp());
 }
 
-// Допоміжна функція для локалі
 Locale getAppLocale(String langName) {
   switch (langName) {
     case 'Українська': return const Locale('uk', 'UA');
@@ -86,11 +71,9 @@ class SmartFridgeApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Слухаємо зміни мови
     return ValueListenableBuilder<String>(
       valueListenable: languageNotifier,
       builder: (context, lang, child) {
-        // Слухаємо зміни теми
         return ValueListenableBuilder<ThemeMode>(
             valueListenable: themeNotifier,
             builder: (context, currentTheme, _) {
@@ -98,10 +81,10 @@ class SmartFridgeApp extends StatelessWidget {
                 debugShowCheckedModeBanner: false,
                 title: 'Fridgify',
 
-                // 👇 Підключаємо тему з notifyer'а
-                themeMode: currentTheme,
+                // 👇👇👇 КРИТИЧНО ВАЖЛИВО ДЛЯ НАВІГАЦІЇ
+                navigatorKey: navigatorKey,
 
-                // Налаштування Світлої теми
+                themeMode: currentTheme,
                 theme: ThemeData(
                   colorScheme: ColorScheme.fromSeed(seedColor: Colors.green, brightness: Brightness.light, surface: Colors.white),
                   useMaterial3: true,
@@ -124,8 +107,6 @@ class SmartFridgeApp extends StatelessWidget {
                       iconTheme: MaterialStateProperty.resolveWith((states) => states.contains(MaterialState.selected) ? const IconThemeData(size: 28) : const IconThemeData(size: 26))
                   ),
                 ),
-
-                // Налаштування Темної теми
                 darkTheme: ThemeData(
                   colorScheme: ColorScheme.fromSeed(seedColor: Colors.green, brightness: Brightness.dark, surface: const Color(0xFF1E1E1E), primary: Colors.green),
                   useMaterial3: true,
@@ -158,7 +139,6 @@ class SmartFridgeApp extends StatelessWidget {
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
                     if (snapshot.hasData) return const HomeScreen();
-                    // Якщо файл входу називається login_screen.dart - зміни тут на LoginScreen()
                     return const AuthScreen();
                   },
                 ),

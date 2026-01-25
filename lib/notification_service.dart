@@ -3,7 +3,13 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter/material.dart';
 import 'dart:io';
-import 'translations.dart'; // 👇 ОБОВ'ЯЗКОВО додай цей імпорт
+import 'translations.dart';
+import 'global.dart';
+
+// 👇 Перевір шляхи, якщо щось підсвітить червоним
+import '../screens/family_screen.dart';
+import '../screens/home_screen.dart';
+import 'chat_screen.dart'; // Або '../utils/chat_screen.dart' залежно від структури папок
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
@@ -27,79 +33,129 @@ class NotificationService {
       iOS: iosSettings,
     );
 
-    await _notifications.initialize(settings);
+    await _notifications.initialize(
+      settings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        final payload = response.payload;
+        if (payload != null) {
+          _navigateLocally(payload);
+        }
+      },
+    );
 
     if (Platform.isAndroid) {
-      final androidImplementation = _notifications.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-      await androidImplementation?.requestNotificationsPermission();
+      try {
+        final androidImplementation = _notifications.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+        await androidImplementation?.requestNotificationsPermission();
+      } catch (e) {
+        debugPrint("Помилка дозволів: $e");
+      }
     }
   }
 
-  // Миттєве сповіщення
-  static Future<void> showInstantNotification(String title, String body) async {
-    // 🔥 Використовуємо переклад для назви каналу (не критично, але приємно)
-    String channelName = AppText.get('notif_instant_title');
-    String channelDesc = AppText.get('notif_instant_body');
+  static void _navigateLocally(String payload) {
+    if (navigatorKey.currentState == null) return;
 
-    AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'expired_channel',
-      channelName,
-      channelDescription: channelDesc,
+    String type = payload;
+    String chatId = '';
+
+    // Розбиваємо payload "type|chatId"
+    if (payload.contains('|')) {
+      final parts = payload.split('|');
+      type = parts[0];
+      if (parts.length > 1) chatId = parts[1];
+    }
+
+    debugPrint("🧭 Навігація Local: type=$type, chatId=$chatId");
+
+    if (type == 'family_chat') {
+      navigatorKey.currentState!.push(
+          MaterialPageRoute(
+              builder: (context) => ChatScreen(
+                chatId: chatId,
+                isDirect: false,
+                // 🔥 ВИПРАВЛЕНО: Тепер береться переклад, а не хардкод
+                chatTitle: AppText.get('chat_title'),
+              )
+          )
+      );
+    }
+    else if (type == 'private_chat') {
+      navigatorKey.currentState!.push(
+          MaterialPageRoute(
+              builder: (context) => ChatScreen(
+                chatId: chatId,
+                isDirect: true,
+              )
+          )
+      );
+    }
+    else if (type == 'fridge') {
+      navigatorKey.currentState!.push(
+          MaterialPageRoute(builder: (context) => const HomeScreen())
+      );
+    }
+  }
+
+  static Future<void> showNotification({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'high_importance_channel',
+      'Важливі сповіщення',
+      channelDescription: 'Сповіщення про чати та продукти',
       importance: Importance.max,
       priority: Priority.high,
-      color: const Color(0xFFFF0000),
+      color: Color(0xFF4CAF50),
     );
 
-    NotificationDetails details = NotificationDetails(android: androidDetails);
+    const NotificationDetails details = NotificationDetails(android: androidDetails);
 
-    await _notifications.show(
-      DateTime.now().millisecond,
-      title, // Титул і боді ми передаємо при виклику, вони вже можуть бути перекладені ззовні
-      body,
-      details,
+    await _notifications.show(id, title, body, details, payload: payload);
+  }
+
+  // --- Методи для продуктів ---
+  static Future<void> showInstantNotification(String title, String body) async {
+    await showNotification(
+      id: DateTime.now().millisecond,
+      title: title,
+      body: body,
+      payload: 'fridge',
     );
   }
 
-  // Заплановане сповіщення
   static Future<void> scheduleNotification(int id, String productName, DateTime expirationDate) async {
     final DateTime warningDate = expirationDate.subtract(const Duration(days: 2));
-
     final scheduledTime = DateTime(
-        warningDate.year,
-        warningDate.month,
-        warningDate.day,
-        10, 0, 0
+        warningDate.year, warningDate.month, warningDate.day, 10, 0, 0
     );
 
     if (scheduledTime.isBefore(DateTime.now())) return;
 
-    // 🔥 БЕРЕМО ПЕРЕКЛАД
-    String title = AppText.get('notif_warn_title'); // "З'їж мене! ⏰"
-    String bodySuffix = AppText.get('notif_warn_body'); // "закінчується через 2 дні!"
-    String fullBody = '$productName $bodySuffix';
-
-    String channelName = AppText.get('notif_channel_name');
-    String channelDesc = AppText.get('notif_channel_desc');
-
     try {
       await _notifications.zonedSchedule(
         id,
-        title,     // Перекладений заголовок
-        fullBody,  // Перекладений текст з назвою продукту
+        AppText.get('notif_warn_title'),
+        '$productName ${AppText.get('notif_warn_body')}',
         tz.TZDateTime.from(scheduledTime, tz.local),
-        NotificationDetails(
+        const NotificationDetails(
           android: AndroidNotificationDetails(
             'reminder_channel',
-            channelName,
-            channelDescription: channelDesc,
+            'Нагадування',
             importance: Importance.max,
             priority: Priority.high,
           ),
         ),
-        androidAllowWhileIdle: true,
+        // 🔥 ВИПРАВЛЕНО ТУТ: Використовуємо 'inexact', щоб уникнути помилки PlatformException
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+
         uiLocalNotificationDateInterpretation:
         UILocalNotificationDateInterpretation.absoluteTime,
+        payload: 'fridge',
       );
     } catch (e) {
       debugPrint("Помилка планування: $e");

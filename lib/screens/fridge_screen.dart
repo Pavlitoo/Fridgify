@@ -6,11 +6,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // 👇 НЕ ЗАБУДЬ
 
 import '../recipe_model.dart';
 import '../ai_service.dart';
 import '../product_model.dart';
-import '../translations.dart'; // 👇 Тут ми беремо AppText
+import '../translations.dart';
 import '../notification_service.dart';
 import '../subscription_service.dart';
 import '../ad_service.dart';
@@ -20,7 +21,6 @@ import '../utils/snackbar_utils.dart';
 import '../secrets.dart';
 import 'recipe_detail_screen.dart';
 
-// Глобальні змінні
 class CategoryData {
   final String id;
   final IconData icon;
@@ -94,43 +94,58 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
     });
   }
 
-  // 🔥 ОНОВЛЕНИЙ МЕТОД ДЛЯ МИТТЄВИХ СПОВІЩЕНЬ З ПЕРЕКЛАДОМ
+  // 🔥 ОНОВЛЕНИЙ МЕТОД З "АНТИ-СПАМОМ"
   void _scheduleAllNotifications(List<QueryDocumentSnapshot> docs) async {
+    // Скасовуємо старі таймери (щоб не було дублів)
     await NotificationService.cancelAll();
 
     List<String> expiredItems = [];
+    final now = DateTime.now();
 
     for (var doc in docs) {
       final product = Product.fromFirestore(doc);
       if (product.category == 'trash') continue;
 
-      // 1. Плануємо майбутні сповіщення (вони використовують переклад всередині сервісу)
-      await NotificationService.scheduleNotification(
-          product.id.hashCode,
-          product.name,
-          product.expirationDate
-      );
+      // 1. Плануємо майбутні сповіщення (таймери)
+      // Ми ставимо таймер ТІЛЬКИ якщо дата ще попереду.
+      // NotificationService сам розбереться з zonedSchedule
+      if (product.expirationDate.isAfter(now)) {
+        await NotificationService.scheduleNotification(
+            product.id.hashCode,
+            product.name,
+            product.expirationDate
+        );
+      }
 
-      // 2. Перевіряємо, чи продукт ВЖЕ зіпсувався або ось-ось (менше 2 днів)
-      final daysLeft = product.expirationDate.difference(DateTime.now()).inDays;
-      if (daysLeft <= 1) { // 1 день або менше (або прострочено)
+      // 2. Збираємо те, що ВЖЕ прострочено або псується завтра
+      final daysLeft = product.expirationDate.difference(now).inDays;
+      if (daysLeft <= 1) {
         expiredItems.add(product.name);
       }
     }
 
-    // 3. Якщо є зіпсовані продукти - показуємо миттєве сповіщення мовою додатка
+    // 3. РОЗУМНЕ ВІДОБРАЖЕННЯ (Тільки 1 раз на день)
     if (expiredItems.isNotEmpty) {
-      // 🔥 БЕРЕМО ПЕРЕКЛАД З TRANSLATIONS.DART
-      String title = AppText.get('notif_instant_title'); // "Зіпсовані продукти" / "Rotten items"
-      String bodyPrefix = AppText.get('notif_instant_body'); // "Важливо!..." / "Important!..."
+      final prefs = await SharedPreferences.getInstance();
+      final String todayDate = "${now.year}-${now.month}-${now.day}";
+      final String? lastShownDate = prefs.getString('last_expired_alert_date');
 
-      // Формуємо список: "Milk, Apple, Cheese"
-      String listString = expiredItems.join(', ');
+      // Якщо сьогодні ще НЕ показували сповіщення - показуємо
+      if (lastShownDate != todayDate) {
+        String title = AppText.get('notif_instant_title');
+        String bodyPrefix = AppText.get('notif_instant_body');
+        String listString = expiredItems.join(', ');
 
-      NotificationService.showInstantNotification(
-          title,
-          "$bodyPrefix: $listString"
-      );
+        await NotificationService.showNotification(
+            id: 99999,
+            title: title,
+            body: "$bodyPrefix: $listString",
+            payload: 'fridge' // Щоб при кліку відкрило холодильник
+        );
+
+        // Запам'ятовуємо, що сьогодні ми вже попередили користувача
+        await prefs.setString('last_expired_alert_date', todayDate);
+      }
     }
   }
 
@@ -765,7 +780,6 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
     );
   }
 
-  // 🔥 МЕТОД BUILD, ЩОБ ПРИБРАТИ ПОМИЛКУ
   @override
   Widget build(BuildContext context) {
     final textColor = Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;

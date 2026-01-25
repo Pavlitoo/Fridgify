@@ -62,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // 🔥 ГОЛОВНА МАГІЯ ТУТ
+  // 🔥 ГОЛОВНА МАГІЯ ТУТ (ВИПРАВЛЕНО НА ПЕРЕКЛАД)
   void _scheduleAllNotifications(List<QueryDocumentSnapshot> docs) async {
     // 1. Спочатку скасовуємо всі старі, щоб не було дублів
     await NotificationService.cancelAll();
@@ -76,7 +76,6 @@ class _HomeScreenState extends State<HomeScreen> {
       if (product.category == 'trash') continue;
 
       // 2. Якщо продукт ще свіжий, плануємо йому сповіщення на майбутнє
-      // Ми використовуємо hashcode назви як унікальний ID
       await NotificationService.scheduleNotification(
           product.id.hashCode,
           product.name,
@@ -95,9 +94,11 @@ class _HomeScreenState extends State<HomeScreen> {
       if (expiringNames.endsWith(", ")) {
         expiringNames = expiringNames.substring(0, expiringNames.length - 2);
       }
+
+      // ✅ ТУТ БУЛА ПОМИЛКА: Тепер беремо текст з перекладу!
       NotificationService.showInstantNotification(
-          "Увага! Продукти псуються ⏰",
-          "Треба з'їсти: $expiringNames"
+          AppText.get('notif_batch_title'), // "Увага! Продукти псуються" (перекладене)
+          "${AppText.get('notif_batch_body')} $expiringNames" // "Треба з'їсти: ..." (перекладене)
       );
     }
   }
@@ -118,9 +119,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showJoinDialog(String code) {
     showDialog(context: context, builder: (ctx) => AlertDialog(
-      backgroundColor: Theme.of(context).cardColor,
-      title: const Text("Вступ у сім'ю 🏠"),
-      content: Text("Знайдено код запрошення:\n$code\n\nБажаєте приєднатися?"),
+      backgroundColor: Theme.of(context).cardTheme.color,
+      title: Text(AppText.get('fam_welcome_title')), // Використовуємо переклад
+      content: Text("${AppText.get('fam_join')}: $code\n\n?"), // Спрощений переклад для діалогу
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppText.get('cancel'))),
         ElevatedButton(onPressed: () {
@@ -128,9 +129,9 @@ class _HomeScreenState extends State<HomeScreen> {
           HouseholdService().requestToJoin(code).then((_) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppText.get('req_sent')), backgroundColor: Colors.blue));
           }).catchError((e) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Помилка: $e"), backgroundColor: Colors.red));
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${AppText.get('err_general')}: $e"), backgroundColor: Colors.red));
           });
-        }, child: const Text("Приєднатися"))
+        }, child: Text(AppText.get('fam_join')))
       ],
     ));
   }

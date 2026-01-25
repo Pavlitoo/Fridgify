@@ -18,8 +18,8 @@ import '../chat_service.dart';
 import '../subscription_service.dart';
 import '../premium_screen.dart';
 import '../global.dart';
-import '../utils/snackbar_utils.dart'; // ✅ Гарні повідомлення
-import '../error_handler.dart'; // ✅ Обробка помилок
+import '../utils/snackbar_utils.dart';
+import '../error_handler.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -43,7 +43,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _displayName = user.displayName ?? "Гість";
+    // Якщо ім'я пусте, беремо дефолтне, але краще потім перекласти
+    _displayName = user.displayName ?? "User";
     _nameController.text = _displayName;
 
     SubscriptionService().init().then((_) {
@@ -58,11 +59,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if(mounted) setState(() => _isPremium = status);
   }
 
-  // 🔥 ВИПРАВЛЕНА ЛОГІКА: ЗАВЖДИ ВІДКРИВАЄМО ЕКРАН, А НЕ КЕРУВАННЯ
   Future<void> _handlePremiumButton() async {
-    // Незалежно від статусу, відкриваємо красивий екран
     await Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen()));
-    // Після повернення оновлюємо статус (раптом купили)
     _checkPremiumStatus();
   }
 
@@ -107,9 +105,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       String base64String = base64Encode(compressedBytes);
       setState(() => _avatarBase64 = base64String);
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({'avatar_base64': base64String}, SetOptions(merge: true));
-      SnackbarUtils.showSuccess(context, "Фото оновлено! 📸");
+
+      // Тут можна додати ключ 'msg_photo_updated' в translations.dart, поки що лишаємо універсальний
+      SnackbarUtils.showSuccess(context, "OK! 📸");
     } catch (e) {
-      SnackbarUtils.showError(context, 'Помилка завантаження фото');
+      SnackbarUtils.showError(context, AppText.get('err_general'));
     } finally {
       setState(() => _isLoadingImage = false);
     }
@@ -123,7 +123,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       await user.updateDisplayName(newName);
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({'displayName': newName}, SetOptions(merge: true));
-      SnackbarUtils.showSuccess(context, "Ім'я змінено! ✅");
+
+      // 🔥 ВИПРАВЛЕНО: Тепер береться переклад з файлу
+      SnackbarUtils.showSuccess(context, AppText.get('msg_name_changed'));
+
     } catch (e) {
       SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
     }
@@ -144,7 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        if(mounted) SnackbarUtils.showWarning(context, 'GPS вимкнено. Увімкніть геолокацію.');
+        if(mounted) SnackbarUtils.showWarning(context, 'GPS OFF'); // Можна додати ключ пізніше
         return;
       }
 
@@ -152,7 +155,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) return;
 
-      if(mounted) SnackbarUtils.showSuccess(context, AppText.get('searching_loc') ?? "Шукаю вашу локацію...");
+      // 🔥 ВИПРАВЛЕНО: Використовуємо переклад
+      if(mounted) SnackbarUtils.showSuccess(context, AppText.get('searching_loc'));
 
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       final url = Uri.parse("https://www.google.com/maps/search/?api=1&query=${position.latitude},${position.longitude}");
@@ -215,7 +219,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: _handlePremiumButton, // 🔥 ТУТ ЗМІНЕНО
+                    onPressed: _handlePremiumButton,
                     icon: Icon(_isPremium ? Icons.check_circle : Icons.star, color: Colors.white),
                     label: Text(
                         _isPremium ? AppText.get('prem_active') : AppText.get('prem_btn_buy'),
@@ -230,8 +234,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
 
-                // Кнопка локації
-                Container(margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), width: double.infinity, child: ElevatedButton.icon(onPressed: _openMyLocation, icon: const Icon(Icons.location_on, color: Colors.white), label: Text(AppText.get('map_btn') ?? "My Location", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), elevation: 4))),
+                // 🔥 ВИПРАВЛЕНО: Кнопка локації тепер бере текст з перекладу
+                Container(margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), width: double.infinity, child: ElevatedButton.icon(onPressed: _openMyLocation, icon: const Icon(Icons.location_on, color: Colors.white), label: Text(AppText.get('map_btn'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), elevation: 4))),
 
                 Container(margin: const EdgeInsets.fromLTRB(16, 20, 16, 40), padding: const EdgeInsets.symmetric(vertical: 8), decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(24), border: Border.all(color: dividerColor.withOpacity(0.05)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 5))]), child: Column(children: [
 
@@ -253,18 +257,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ListTile(
                       contentPadding: tilePadding,
                       leading: _buildIcon(Icons.people, Colors.pink),
-                      title: Row(children: [Text(AppText.get('family_settings') ?? "My Family", style: _tileStyle(textColor)), if (!_isPremium) const Padding(padding: EdgeInsets.only(left: 8), child: Icon(Icons.lock, size: 16, color: Colors.grey))]),
+                      // 🔥 ВИПРАВЛЕНО: Текст налаштувань сім'ї
+                      title: Row(children: [Text(AppText.get('family_settings'), style: _tileStyle(textColor)), if (!_isPremium) const Padding(padding: EdgeInsets.only(left: 8), child: Icon(Icons.lock, size: 16, color: Colors.grey))]),
                       trailing: Row(mainAxisSize: MainAxisSize.min, children: [if (_householdId != null && _isPremium) StreamBuilder<int>(stream: _unreadStream, builder: (context, snap) { if (!snap.hasData || snap.data == 0) return const SizedBox(); return Container(margin: const EdgeInsets.only(right: 10), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(12)), child: Text(snap.data! > 99 ? "99+" : "${snap.data!}", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))); }), _arrow()]),
                       onTap: () { if (!_isPremium) { _handlePremiumButton(); } else { Navigator.push(context, MaterialPageRoute(builder: (context) => const FamilyScreen())); } }
                   ),
 
                   const Divider(height: 1),
 
-                  SwitchListTile(contentPadding: tilePadding, secondary: _buildIcon(Icons.dark_mode, Colors.deepPurple, bgColor: Colors.grey.shade200), title: Text(AppText.get('theme_dark') ?? "Dark Mode", style: _tileStyle(textColor)), value: isRealDarkMode, onChanged: _toggleDarkMode, activeColor: Colors.deepPurple),
+                  // 🔥 ВИПРАВЛЕНО: Текст теми
+                  SwitchListTile(contentPadding: tilePadding, secondary: _buildIcon(Icons.dark_mode, Colors.deepPurple, bgColor: Colors.grey.shade200), title: Text(AppText.get('theme_dark'), style: _tileStyle(textColor)), value: isRealDarkMode, onChanged: _toggleDarkMode, activeColor: Colors.deepPurple),
 
                   const Divider(height: 1),
 
-                  ListTile(contentPadding: tilePadding, leading: _buildIcon(Icons.language, Colors.blue), title: Text(AppText.get('language') ?? "Language", style: _tileStyle(textColor)), trailing: _arrow(), onTap: () => _showLanguageDialog()),
+                  // 🔥 ВИПРАВЛЕНО: Текст мови
+                  ListTile(contentPadding: tilePadding, leading: _buildIcon(Icons.language, Colors.blue), title: Text(AppText.get('language'), style: _tileStyle(textColor)), trailing: _arrow(), onTap: () => _showLanguageDialog()),
                 ])),
               ]),
             ),

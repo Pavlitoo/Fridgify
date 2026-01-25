@@ -1,7 +1,7 @@
 name: smart_fridge
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.0.0+8
+version: 1.0.0+13
 
 environment:
   sdk: '>=3.2.3 <4.0.0'
@@ -14,7 +14,7 @@ dependencies:
   firebase_core: ^2.27.0
   firebase_auth: ^4.17.8
   cloud_firestore: ^4.15.8
-  firebase_messaging: ^14.7.19
+  firebase_messaging: ^14.9.4
 
   # Auth
   google_sign_in: ^6.2.1
@@ -51,6 +51,7 @@ dependencies:
   google_mobile_ads: ^7.0.0
   flutter_sound: ^9.28.0
   in_app_purchase: ^3.2.3
+  googleapis_auth: ^2.0.0
 
 dev_dependencies:
   flutter_test:

@@ -47,6 +47,9 @@ app.*.map.json
 
 .env/
 
+# Google Service Account Credentials
+lib/credentials.dart
+
 # Secrets
 lib/secrets.dart
 android/app/src/main/res/values/secrets.xml
