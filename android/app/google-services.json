@@ -30,6 +30,14 @@
           }
         },
         {
+          "client_id": "751094617128-odtik3m5btq9v7lkqr8jh4dht1rvdomj.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.pavlo.smart_fridge",
+            "certificate_hash": "d2e2e20aa22e3a5eabdc10c03ab4d92a3b362d0b"
+          }
+        },
+        {
           "client_id": "751094617128-qsa9qie4nlj7igldanrlhhanr38sccdu.apps.googleusercontent.com",
           "client_type": 3
         }

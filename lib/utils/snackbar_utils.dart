@@ -13,6 +13,11 @@ class SnackbarUtils {
     _show(context, message, Colors.green.shade700, Icons.check_circle_outline);
   }
 
+  // 🔥 ДОДАНО: Метод для інформаційних повідомлень (для чату)
+  static void showInfo(BuildContext context, String message) {
+    _show(context, message, Colors.blue.shade700, Icons.info_outline);
+  }
+
   static void _show(BuildContext context, String message, Color color, IconData icon) {
     try {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -37,7 +42,7 @@ class SnackbarUtils {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           margin: const EdgeInsets.all(16),
           elevation: 6,
-          duration: const Duration(seconds: 4),
+          duration: const Duration(seconds: 2), // Трохи зменшив час (було 4), щоб не заважало в чаті
         ),
       );
     } catch (e) {

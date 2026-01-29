@@ -4,11 +4,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'notification_service.dart';
 import 'global.dart';
+import '../translations.dart'; // ✅ Додано імпорт перекладів
 
-// 👇 Перевір шляхи до файлів
+// 👇 Імпорти
 import '../screens/family_screen.dart';
 import '../screens/home_screen.dart';
-import 'chat_screen.dart'; // Або '../screens/chat_screen.dart' (де він у тебе лежить)
+import 'chat_screen.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -35,26 +36,20 @@ class FCMService {
           .update({'fcmToken': fCMToken});
     }
 
-    // 1. Клік, коли додаток був ЗАКРИТИЙ
     FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
       if (message != null) {
         _handleMessage(message);
       }
     });
 
-    // 2. Клік, коли додаток був ЗГОРНУТИЙ
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       _handleMessage(message);
     });
 
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-    // 3. Додаток ВІДКРИТИЙ (Foreground)
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       if (message.notification != null) {
-        // Щоб не було подвійних сповіщень:
-        // Тут ми показуємо локальне сповіщення (плашку), бо системне не приходить, коли додаток відкритий.
-
         String type = message.data['type'] ?? 'general';
         String chatId = message.data['chatId'] ?? '';
         String payload = "$type|$chatId";
@@ -70,7 +65,6 @@ class FCMService {
   }
 
   void _handleMessage(RemoteMessage message) {
-    // Затримка, щоб Flutter встиг завантажитись
     Future.delayed(const Duration(milliseconds: 500), () {
       final String type = message.data['type'] ?? '';
       final String chatId = message.data['chatId'] ?? '';
@@ -80,13 +74,12 @@ class FCMService {
       if (navigatorKey.currentState == null) return;
 
       if (type == 'family_chat') {
-        // 🔥 ВИПРАВЛЕНО: Відкриваємо ЧАТ, а не FamilyScreen
         navigatorKey.currentState!.push(
             MaterialPageRoute(
                 builder: (context) => ChatScreen(
                   chatId: chatId,
-                  isDirect: false, // Це сімейний чат
-                  chatTitle: 'Сімейний чат',
+                  isDirect: false,
+                  chatTitle: AppText.get('chat_title'), // ✅ Перекладений заголовок
                 )
             )
         );
@@ -96,7 +89,7 @@ class FCMService {
             MaterialPageRoute(
                 builder: (context) => ChatScreen(
                   chatId: chatId,
-                  isDirect: true, // Це особистий чат
+                  isDirect: true,
                 )
             )
         );

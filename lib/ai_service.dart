@@ -28,42 +28,102 @@ class AiRecipeService {
       default: dietInstruction = "Standard tasty food.";
     }
 
-    // 🔥 ОНОВЛЕНИЙ ПРОМПТ
+    // 🧠 AI САМ РОЗУМІЄ ЩО СМІТТЯ
     final String prompt = '''
-    Role: Professional Chef & Tech Parser.
-    User Inventory: ${ingredients.join(', ')}.
-    Target Language: $userLanguage.
-    Diet: $dietInstruction
+You are a SMART chef with built-in security system. Your job has 2 phases:
 
-    TASK 1 (ANALYSIS):
-    - The "User Inventory" might contain words in different languages (e.g., "Ananas" instead of "Pineapple"). Understand them as food.
-    - Check for GIBBERISH (random letters like "asdf", "ываыва", "powerwvj").
-    - If ALL items are gibberish/not food -> Return JSON: [{"error": "INVALID_INGREDIENTS"}]
-    - If at least ONE item is valid food -> Proceed to TASK 2.
+📋 USER'S INPUT: ${ingredients.join(', ')}
+🗣️ TARGET LANGUAGE: $userLanguage
+🥗 DIET TYPE: $dietInstruction
 
-    TASK 2 (GENERATION):
-    - Create 5 recipes using the valid ingredients found.
-    - Translate everything to "$userLanguage".
-    - Convert units to Metric (g, ml, kg) if language is Ukrainian/European.
-    - Missing ingredients MUST have quantities (e.g., "50ml Oil").
+═══════════════════════════════════════════════════════
+PHASE 1: INTELLIGENT FOOD VALIDATION
+═══════════════════════════════════════════════════════
 
-    JSON OUTPUT ONLY (No extra text):
-    [
-      {
-        "title": "Recipe Name",
-        "description": "Short description",
-        "time": "30 min",
-        "kcal": "450",
-        "isVegetarian": true,
-        "searchQuery": "English dish name",
-        "ingredients": ["200g Ingredient"],
-        "missingIngredients": ["50ml Oil", "10g Salt"],
-        "steps": ["Step 1", "Step 2"]
-      }
+Analyze EACH item in the user's list. Ask yourself:
+❓ "Is this something you can EAT or COOK with?"
+
+✅ REAL FOOD (Accept these):
+- Fruits: Apple, Banana, Orange, Mango, etc.
+- Vegetables: Tomato, Potato, Carrot, Cucumber, etc.
+- Proteins: Chicken, Beef, Fish, Egg, Tofu, etc.
+- Dairy: Milk, Cheese, Butter, Yogurt, etc.
+- Grains: Rice, Pasta, Bread, Flour, etc.
+- Spices & Condiments: Salt, Pepper, Sugar, Honey, Oil, etc.
+- Beverages for cooking: Water, Wine, Broth, etc.
+
+❌ GARBAGE (Reject these):
+- Electronics: laptop, phone, computer, keyboard
+- Furniture: chair, table, desk, sofa
+- Random typing: asdf, qwerty, zzzz, lalala, sdfsdf
+- Test words: test, testing, debug, dev
+- Non-food objects: brick, stone, paper, plastic
+- Gibberish: kjsdhfkjsd, wwwww, xxxxxx
+- Anything that makes NO SENSE as food
+
+🔍 VALIDATION LOGIC:
+- If ALL items are real food → Continue to Phase 2
+- If EVEN ONE item is garbage/non-food → Return error immediately
+
+═══════════════════════════════════════════════════════
+PHASE 2: RECIPE GENERATION (Only if Phase 1 passed)
+═══════════════════════════════════════════════════════
+
+Create EXACTLY 5 DIVERSE recipes:
+1. Different cooking methods (baking, frying, raw, boiling, etc.)
+2. Different dish types (main course, salad, dessert, soup, etc.)
+3. Adapt to available ingredients:
+   - Only fruits? → Make fruit salads, smoothies, desserts, jams
+   - Only vegetables? → Make salads, soups, stir-fries
+   - Mix of items? → Create balanced meals
+
+📝 RECIPE REQUIREMENTS:
+- Translate EVERYTHING to "$userLanguage"
+- Use Metric units ONLY: g, kg, ml, l (NO cups, oz, tbsp)
+- Be creative but realistic
+
+📦 INGREDIENT SORTING:
+- "ingredients": Items from user's list that THIS recipe uses
+  Example: User has [Apple, Milk, Egg], recipe uses Apple & Milk
+  → ["2 pcs Apple", "200ml Milk"]
+
+- "missingIngredients": Everything else the recipe needs
+  Example: Recipe also needs Flour, Sugar
+  → ["150g Flour", "30g Sugar"]
+
+═══════════════════════════════════════════════════════
+OUTPUT FORMAT
+═══════════════════════════════════════════════════════
+
+If VALIDATION FAILED (found non-food):
+Return this EXACT JSON:
+[{"error": "INVALID_INGREDIENTS"}]
+
+If VALIDATION PASSED (all items are food):
+Return 5 recipes in this format:
+[
+  {
+    "title": "Recipe name in $userLanguage",
+    "description": "Appetizing description in $userLanguage",
+    "time": "30 min",
+    "kcal": "350",
+    "isVegetarian": true,
+    "searchQuery": "english name for image search",
+    "ingredients": ["2 pcs Apple", "200ml Milk"],
+    "missingIngredients": ["150g Flour", "2 pcs Egg", "30g Sugar"],
+    "steps": [
+      "Step 1 in $userLanguage",
+      "Step 2 in $userLanguage",
+      "Step 3 in $userLanguage"
     ]
-    ''';
+  },
+  ... (4 more recipes)
+]
 
-    debugPrint("👨‍🍳 AI Chef: Thinking...");
+⚠️ CRITICAL: Return ONLY pure JSON (no markdown, no ```json, no explanation)
+''';
+
+    debugPrint("👨‍🍳 AI Chef: Analyzing ingredients...");
 
     try {
       final response = await http.post(
@@ -76,11 +136,11 @@ class AiRecipeService {
         },
         body: jsonEncode({
           "model": "openai/gpt-4o-mini",
+          "temperature": 0.6,
+          "max_tokens": 4500,
           "messages": [{"role": "user", "content": prompt}],
-          "temperature": 0.4,
-          "max_tokens": 2500,
         }),
-      ).timeout(const Duration(seconds: 100));
+      ).timeout(const Duration(seconds: 120));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
@@ -91,20 +151,21 @@ class AiRecipeService {
 
         String content = data['choices'][0]['message']['content'];
 
-        // 🔥 ВИПРАВЛЕННЯ ПОМИЛКИ FormatException
-        // Шукаємо чистий JSON масив між [ та ]
+        // Чистка від Markdown
+        content = content.replaceAll('```json', '').replaceAll('```', '').trim();
+
         int startIndex = content.indexOf('[');
         int endIndex = content.lastIndexOf(']');
 
         if (startIndex == -1 || endIndex == -1) {
-          // Якщо ШІ не повернув масив, можливо він повернув помилку без дужок
-          if (content.contains("INVALID_INGREDIENTS")) {
+          if (content.toLowerCase().contains("invalid") ||
+              content.toLowerCase().contains("garbage") ||
+              content.toLowerCase().contains("not food")) {
             throw Exception('INVALID_INGREDIENTS');
           }
           throw Exception("AI Format Error: No JSON found");
         }
 
-        // Вирізаємо чистий JSON
         String jsonString = content.substring(startIndex, endIndex + 1);
 
         List<dynamic> jsonList;
@@ -115,34 +176,34 @@ class AiRecipeService {
           throw Exception("JSON_PARSE_ERROR");
         }
 
-        // Перевірка на валідацію
+        // Перевірка на помилку валідації
         if (jsonList.isNotEmpty && jsonList[0] is Map && jsonList[0].containsKey('error')) {
-          throw Exception('INVALID_INGREDIENTS');
+          if (jsonList[0]['error'] == 'INVALID_INGREDIENTS') {
+            debugPrint("🚫 AI detected non-food items in the list");
+            throw Exception('INVALID_INGREDIENTS');
+          }
         }
+
+        debugPrint("✅ AI validated ingredients & created ${jsonList.length} recipes");
 
         return jsonList.map((json) {
           String query = json['searchQuery'] ?? 'food';
           String imageUrl = "https://tse2.mm.bing.net/th?q=${Uri.encodeComponent('$query meal recipe')}&w=800&h=600&c=7&rs=1&p=0";
 
-          // 🔥 БЕЗПЕЧНА ФУНКЦІЯ ЗАМІНИ ОДИНИЦЬ
           List<String> cleanUnits(List<dynamic> list) {
             List<String> result = list.map((e) => e.toString()).toList();
 
             if (userLanguage == 'Українська') {
               return result.map((str) {
-                // Прибираємо можливі артефакти ($)
-                String s = str.replaceAll(r'$', '');
-
-                // Замінюємо одиниці
+                String s = str.replaceAll(r'$', '').trim();
                 s = s.replaceAllMapped(RegExp(r'(\d+)\s*g\b', caseSensitive: false), (m) => '${m[1]} г');
                 s = s.replaceAllMapped(RegExp(r'(\d+)\s*kg\b', caseSensitive: false), (m) => '${m[1]} кг');
                 s = s.replaceAllMapped(RegExp(r'(\d+)\s*ml\b', caseSensitive: false), (m) => '${m[1]} мл');
                 s = s.replaceAllMapped(RegExp(r'(\d+)\s*l\b', caseSensitive: false), (m) => '${m[1]} л');
-
                 s = s.replaceAll(RegExp(r'\btbsp\b', caseSensitive: false), 'ст.л.');
                 s = s.replaceAll(RegExp(r'\btsp\b', caseSensitive: false), 'ч.л.');
                 s = s.replaceAll(RegExp(r'\bpcs\b', caseSensitive: false), 'шт');
-
+                s = s.replaceAll(RegExp(r'\bcup\b', caseSensitive: false), 'склянка');
                 return s;
               }).toList();
             }

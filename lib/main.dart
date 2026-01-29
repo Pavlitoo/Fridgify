@@ -5,24 +5,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-// import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // ❌ Прибираємо, щоб не плутати з нашим сервісом
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firebase_options.dart';
 import 'translations.dart';
 import 'notification_service.dart';
-import 'fcm_service.dart'; // 👇 Додай імпорт нового файлу
+import 'fcm_service.dart';
 import 'subscription_service.dart';
-import 'ad_service.dart';
-import 'global.dart';
+import 'global.dart'; // Якщо navigatorKey був тут, ми його перевизначимо в main для надійності
 
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 
+// 🔥 1. Глобальний ключ для навігації
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 int globalTabIndex = 0;
 
 Future<void> main() async {
@@ -36,16 +35,15 @@ Future<void> main() async {
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Ініціалізація сервісів
-  await NotificationService.init();
-  await FCMService().init(); // 🔥 Ініціалізація FCM
+  // 🔥 2. Передаємо ключ у NotificationService
+  await NotificationService.init(navigatorKey);
+  await FCMService().init();
   await SubscriptionService().init();
 
   if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
     await MobileAds.instance.initialize();
   }
 
-  // Налаштування теми та мови
   final prefs = await SharedPreferences.getInstance();
   final bool isDark = prefs.getBool('is_dark_mode') ?? false;
   final String savedLang = prefs.getString('language') ?? 'English';
@@ -81,7 +79,7 @@ class SmartFridgeApp extends StatelessWidget {
                 debugShowCheckedModeBanner: false,
                 title: 'Fridgify',
 
-                // 👇👇👇 КРИТИЧНО ВАЖЛИВО ДЛЯ НАВІГАЦІЇ
+                // 🔥 3. Прив'язуємо ключ до MaterialApp
                 navigatorKey: navigatorKey,
 
                 themeMode: currentTheme,

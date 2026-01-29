@@ -15,12 +15,14 @@ class _PremiumScreenState extends State<PremiumScreen> {
   @override
   void initState() {
     super.initState();
+    // Ініціалізуємо сервіс, щоб він підтягнув актуальну ціну з Google
     SubscriptionService().init();
   }
 
   Future<void> _buy() async {
     setState(() => _isLoading = true);
 
+    // Перевірка, чи завантажились продукти
     if (SubscriptionService().products.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -32,6 +34,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
     }
 
     try {
+      // Запуск процесу покупки
       bool launched = await SubscriptionService().buyPremium();
       if (!launched && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -39,7 +42,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
         );
       }
     } catch (e) {
-      // ignore
+      debugPrint("Buy error: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -52,7 +55,13 @@ class _PremiumScreenState extends State<PremiumScreen> {
       builder: (context, child) {
         final isPremium = SubscriptionService().isPremium;
         final products = SubscriptionService().products;
-        final String priceText = products.isNotEmpty ? products.first.price : "...";
+
+        // 🔥 Тут логіка:
+        // 1. Якщо Google віддав ціну -> показуємо її (вона буде 59.99 грн після оновлення кешу).
+        // 2. Якщо ще вантажиться -> показуємо заглушку "59.99 ₴".
+        final String priceText = products.isNotEmpty
+            ? products.first.price
+            : "59.99 ₴";
 
         return Scaffold(
           body: Container(
@@ -66,7 +75,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
             child: SafeArea(
               child: Stack(
                 children: [
-                  // Кнопка закриття
+                  // Кнопка закриття (Хрестик)
                   Align(
                     alignment: Alignment.topRight,
                     child: Padding(
@@ -83,7 +92,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     children: [
                       const Spacer(flex: 2),
 
-                      // Іконка
+                      // Велика іконка
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
@@ -106,7 +115,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                       ),
                       const SizedBox(height: 15),
 
-                      // Опис
+                      // Опис під заголовком
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 40),
                         child: Text(
@@ -118,7 +127,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
 
                       const Spacer(flex: 1),
 
-                      // Список переваг (тільки якщо не куплено або для нагадування)
+                      // Список переваг (тільки якщо не куплено)
                       if (!isPremium) ...[
                         _benefitRow(Icons.block, AppText.get('ben_1')),
                         _benefitRow(Icons.all_inclusive, AppText.get('ben_2')),
@@ -128,7 +137,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
 
                       const Spacer(flex: 3),
 
-                      // Кнопки
+                      // Кнопка Купити / Керувати
                       if (isPremium) ...[
                         Container(
                           margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -175,6 +184,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(AppText.get('prem_btn_buy'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                                // Ціна + " / міс."
                                 Text("$priceText / ${AppText.get('u_months')}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.normal)),
                               ],
                             ),

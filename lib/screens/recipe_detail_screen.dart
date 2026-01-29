@@ -7,6 +7,7 @@ import '../translations.dart';
 import '../utils/snackbar_utils.dart';
 import '../secrets.dart';
 import '../subscription_service.dart';
+import '../ad_service.dart'; // ✅ НЕ ЗАБУДЬ ЦЕЙ ІМПОРТ
 
 class RecipeDetailScreen extends StatefulWidget {
   final Recipe recipe;
@@ -40,7 +41,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
 
   void _loadBannerAd() {
     _bannerAd = BannerAd(
-      adUnitId: Secrets.adUnitId,
+      // 🔥 ВИПРАВЛЕНО ТУТ
+      adUnitId: AdService().bannerAdUnitId,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(

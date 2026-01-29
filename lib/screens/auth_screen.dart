@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // 🔥 Обов'язково для обробки помилок
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import '../utils/snackbar_utils.dart'; // ✅ Гарні повідомлення
-import '../error_handler.dart'; // ✅ Обробка помилок
+import '../auth_service.dart';
+import '../utils/snackbar_utils.dart';
+import '../error_handler.dart';
 import '../translations.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -15,8 +14,7 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final AuthService _authService = AuthService(); // Твій сервіс
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -24,7 +22,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   bool _isLogin = true;
   bool _isLoading = false;
-  bool _isPasswordVisible = false; // 🔥 Для кнопки "Око"
+  bool _isPasswordVisible = false;
 
   @override
   void dispose() {
@@ -34,18 +32,21 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose();
   }
 
+  // ---------------------------------------------------------------------------
+  // 📧 ВХІД / РЕЄСТРАЦІЯ (З ОНОВЛЕНОЮ ОБРОБКОЮ ПОМИЛОК)
+  // ---------------------------------------------------------------------------
   Future<void> _authenticate() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
     final name = _nameController.text.trim();
 
+    // Базові перевірки
     if (email.isEmpty || password.isEmpty) {
       SnackbarUtils.showWarning(context, AppText.get('err_fill_all'));
       return;
     }
 
-    // 🔥 Перевірка мінімальної довжини пароля
-    if (password.length < 8) {
+    if (password.length < 6) { // Виправив на 6, бо Firebase мінімум 6
       SnackbarUtils.showWarning(context, AppText.get('err_min_pass_length'));
       return;
     }
@@ -59,20 +60,47 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       if (_isLogin) {
-        await _auth.signInWithEmailAndPassword(email: email, password: password);
-        // Успішний вхід -> можна показати повідомлення, але main.dart сам перекине
+        // 🔥 ВХІД через твій сервіс
+        await _authService.signInWithEmail(email, password);
         if (mounted) SnackbarUtils.showSuccess(context, AppText.get('msg_welcome'));
       } else {
-        UserCredential cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);
-        if (cred.user != null) {
-          await cred.user!.updateDisplayName(name);
-          await cred.user!.reload();
-        }
+        // 🔥 РЕЄСТРАЦІЯ через твій сервіс
+        await _authService.signUpWithEmail(email, password, name);
         if (mounted) SnackbarUtils.showSuccess(context, AppText.get('msg_account_created'));
       }
-    } catch (e) {
+
+      // Якщо успіх — нічого не робимо, StreamBuilder сам оновить екран
+
+    } on FirebaseAuthException catch (e) {
+      // 🔥🔥🔥 ОСЬ ТУТ МАГІЯ: Перехоплюємо коди Firebase і даємо переклад
+      String errorMessage = AppText.get('err_general');
+
+      switch (e.code) {
+        case 'invalid-credential': // Головна помилка (невірний логін/пароль)
+        case 'user-not-found':
+        case 'wrong-password':
+          errorMessage = AppText.get('err_login_bad');
+          break;
+        case 'email-already-in-use':
+          errorMessage = AppText.get('err_user_exists');
+          break;
+        case 'invalid-email':
+          errorMessage = AppText.get('err_email_bad');
+          break;
+        case 'weak-password':
+          errorMessage = AppText.get('err_pass_weak');
+          break;
+        case 'too-many-requests':
+          errorMessage = AppText.get('err_too_many_requests');
+          break;
+      }
+
       if (mounted) {
-        // 🔥 Використовуємо наш крутий ErrorHandler
+        SnackbarUtils.showError(context, errorMessage);
+      }
+    } catch (e) {
+      // Інші помилки
+      if (mounted) {
         SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
       }
     } finally {
@@ -80,6 +108,9 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // 🔑 СКИНУТИ ПАРОЛЬ
+  // ---------------------------------------------------------------------------
   Future<void> _resetPassword() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
@@ -90,10 +121,10 @@ class _AuthScreenState extends State<AuthScreen> {
       SnackbarUtils.showWarning(context, AppText.get('err_invalid_email'));
       return;
     }
+
     try {
-      await _auth.sendPasswordResetEmail(email: email);
+      await _authService.resetPassword(email);
       if (mounted) {
-        // 🔥 Повідомлення про відправку листа
         SnackbarUtils.showSuccess(context, AppText.get('msg_email_sent'));
       }
     } catch (e) {
@@ -103,21 +134,16 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // 🔵 GOOGLE SIGN IN
+  // ---------------------------------------------------------------------------
   Future<void> _googleSignInFunc() async {
     setState(() => _isLoading = true);
     try {
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) {
-        // Користувач скасував вхід - це не помилка, просто виходимо
-        return;
+      final user = await _authService.signInWithGoogle();
+      if (user != null && mounted) {
+        SnackbarUtils.showSuccess(context, AppText.get('msg_welcome'));
       }
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final OAuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-      await _auth.signInWithCredential(credential);
-      if (mounted) SnackbarUtils.showSuccess(context, AppText.get('msg_welcome'));
     } catch (e) {
       if (mounted) SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
     } finally {
@@ -125,16 +151,16 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // ⚫ GITHUB SIGN IN
+  // ---------------------------------------------------------------------------
   Future<void> _githubSignInFunc() async {
     setState(() => _isLoading = true);
     try {
-      OAuthProvider githubProvider = OAuthProvider('github.com');
-      if (kIsWeb) {
-        await _auth.signInWithPopup(githubProvider);
-      } else {
-        await _auth.signInWithProvider(githubProvider);
+      final user = await _authService.signInWithGitHub(context);
+      if (user != null && mounted) {
+        SnackbarUtils.showSuccess(context, AppText.get('msg_welcome'));
       }
-      if (mounted) SnackbarUtils.showSuccess(context, AppText.get('msg_welcome'));
     } catch (e) {
       if (mounted) SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
     } finally {
@@ -165,6 +191,7 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               const SizedBox(height: 30),
 
+              // Поле Ім'я (тільки для реєстрації)
               if (!_isLogin) ...[
                 TextField(
                   controller: _nameController,
@@ -179,6 +206,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 const SizedBox(height: 16),
               ],
 
+              // Поле Email
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
@@ -191,22 +219,26 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               const SizedBox(height: 16),
 
-              // 🔥 Пароль з кнопкою "Око"
+              // Поле Пароль
               TextField(
                 controller: _passwordController,
-                obscureText: !_isPasswordVisible, // Змінюємо видимість
+                obscureText: !_isPasswordVisible,
                 style: TextStyle(color: textColor),
                 decoration: InputDecoration(
                   labelText: AppText.get('password_field'),
                   prefixIcon: const Icon(Icons.lock_outline),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   suffixIcon: IconButton(
-                    icon: Icon(_isPasswordVisible ? Icons.visibility : Icons.visibility_off, color: Colors.grey),
+                    icon: Icon(
+                        _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                        color: Colors.grey
+                    ),
                     onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
                   ),
                 ),
               ),
 
+              // Кнопка "Забули пароль?" (ТІЛЬКИ ПРИ ВХОДІ)
               if (_isLogin)
                 Align(
                   alignment: Alignment.centerRight,
@@ -218,6 +250,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
               const SizedBox(height: 20),
 
+              // Кнопка Входу/Реєстрації
               ElevatedButton(
                 onPressed: _isLoading ? null : _authenticate,
                 style: ElevatedButton.styleFrom(
@@ -225,21 +258,34 @@ class _AuthScreenState extends State<AuthScreen> {
                   backgroundColor: Colors.green.shade600,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 4,
                 ),
                 child: _isLoading
                     ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : Text(_isLogin ? AppText.get('login_btn') : AppText.get('signup_btn'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    : Text(
+                    _isLogin ? AppText.get('login_btn') : AppText.get('signup_btn'),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
+                ),
               ),
 
               const SizedBox(height: 20),
 
+              // Перемикач "Вже є акаунт?"
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(_isLogin ? AppText.get('no_account') : AppText.get('has_account'), style: TextStyle(color: textColor)),
+                  Text(
+                      _isLogin ? AppText.get('no_account') : AppText.get('has_account'),
+                      style: TextStyle(color: textColor)
+                  ),
                   const SizedBox(width: 5),
                   GestureDetector(
-                    onTap: () => setState(() => _isLogin = !_isLogin),
+                    onTap: () => setState(() {
+                      _isLogin = !_isLogin;
+                      _emailController.clear();
+                      _passwordController.clear();
+                      _nameController.clear();
+                    }),
                     child: Text(
                       _isLogin ? AppText.get('create_one') : AppText.get('enter_one'),
                       style: TextStyle(color: Colors.green.shade600, fontWeight: FontWeight.bold),
@@ -249,9 +295,17 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
 
               const SizedBox(height: 30),
-              Row(children: [const Expanded(child: Divider()), Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text(AppText.get('or_continue'))), const Expanded(child: Divider())]),
+
+              // Розділювач
+              Row(children: [
+                const Expanded(child: Divider()),
+                Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text(AppText.get('or_continue'), style: const TextStyle(color: Colors.grey))),
+                const Expanded(child: Divider())
+              ]),
+
               const SizedBox(height: 20),
 
+              // Соц. мережі
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -282,9 +336,12 @@ class _AuthScreenState extends State<AuthScreen> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
-          shape: BoxShape.circle,
-          color: Theme.of(context).cardColor,
+            border: Border.all(color: Colors.grey.shade300),
+            shape: BoxShape.circle,
+            color: Theme.of(context).cardColor,
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5, offset: const Offset(0, 2))
+            ]
         ),
         child: Icon(icon, color: color, size: 28),
       ),

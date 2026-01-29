@@ -17,6 +17,7 @@ import 'package:googleapis_auth/auth_io.dart' as auth;
 import '../chat_service.dart';
 import '../translations.dart';
 import '../credentials.dart'; // ✅ Імпорт файлу з ключами
+import '../utils/snackbar_utils.dart'; // ✅ Імпорт для гарних повідомлень
 
 class ChatScreen extends StatefulWidget {
   final String chatId;
@@ -274,7 +275,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         bool isLiked = likes.contains(user.uid);
                         return GestureDetector(
                           onLongPress: () => _showMsgOptions(context, docs[index], isMe),
-                          // 🔥 ЛАЙК ПОВІДОМЛЕННЯ
+                          // 🔥 ВІДПРАВКА PUSH ПРИ ЛАЙКУ
                           onDoubleTap: () {
                             _chatService.toggleLikeMessage(widget.chatId, docs[index].id, isLiked, isDirect: widget.isDirect);
                             if (!isLiked && !isMe) {
@@ -356,7 +357,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return SafeArea(
       child: Column(
         children: [
-          if (_replyMessage != null) Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), color: isDark ? Colors.grey.shade900 : Colors.grey.shade200, child: Row(children: [const Icon(Icons.reply, color: Colors.green), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("${AppText.get('notif_reply_to')} ${_replyMessage!['sender']}", style: TextStyle(fontWeight: FontWeight.bold, color: textColor)), Text(_replyMessage!['text']!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: textColor.withOpacity(0.7)))])), IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _replyMessage = null))])),
+          if (_replyMessage != null) Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), color: isDark ? Colors.grey.shade900 : Colors.grey.shade200, child: Row(children: [const Icon(Icons.reply, color: Colors.green), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("Replying to ${_replyMessage!['sender']}", style: TextStyle(fontWeight: FontWeight.bold, color: textColor)), Text(_replyMessage!['text']!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: textColor.withOpacity(0.7)))])), IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _replyMessage = null))])),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             color: isDark ? const Color(0xFF1F1F1F) : Colors.white,
@@ -364,7 +365,14 @@ class _ChatScreenState extends State<ChatScreen> {
               if (_editingMsgId == null) IconButton(icon: const Icon(Icons.camera_alt), color: Colors.grey, onPressed: _pickAndSendImage) else IconButton(icon: const Icon(Icons.close), color: Colors.red, onPressed: () { setState(() { _editingMsgId = null; _msgController.clear(); }); }),
               Expanded(child: Container(padding: const EdgeInsets.symmetric(horizontal: 16), decoration: BoxDecoration(color: isDark ? const Color(0xFF2C2C2C) : Colors.grey.shade100, borderRadius: BorderRadius.circular(24)), child: TextField(controller: _msgController, maxLines: 5, minLines: 1, style: TextStyle(color: textColor), decoration: InputDecoration(hintText: _editingMsgId != null ? "Editing..." : AppText.get('chat_hint'), hintStyle: TextStyle(color: isDark ? Colors.grey : null), border: InputBorder.none, contentPadding: const EdgeInsets.symmetric(vertical: 10))))),
               const SizedBox(width: 8),
-              GestureDetector(onLongPress: (_isTextEmpty && _editingMsgId == null) ? _startRecording : null, onLongPressUp: (_isTextEmpty && _editingMsgId == null) ? _stopRecording : null, onTap: _isTextEmpty && _editingMsgId == null ? () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Hold to record 🎤"), duration: Duration(seconds: 1))) : _sendMessage, child: CircleAvatar(radius: 24, backgroundColor: _isRecording ? Colors.red : (_editingMsgId != null ? Colors.blue : const Color(0xFF00897B)), child: _isRecording ? const Icon(Icons.mic, color: Colors.white, size: 24) : Icon(_editingMsgId != null ? Icons.check : (_isTextEmpty ? Icons.mic_none : Icons.send), color: Colors.white, size: 24))),
+              GestureDetector(
+                // 🔥 ВИПРАВЛЕНО ТУТ: ВИКОРИСТОВУЄМО SnackbarUtils та переклад
+                  onLongPress: (_isTextEmpty && _editingMsgId == null) ? _startRecording : null,
+                  onLongPressUp: (_isTextEmpty && _editingMsgId == null) ? _stopRecording : null,
+                  onTap: _isTextEmpty && _editingMsgId == null
+                      ? () => SnackbarUtils.showInfo(context, AppText.get('chat_hold_to_record'))
+                      : _sendMessage,
+                  child: CircleAvatar(radius: 24, backgroundColor: _isRecording ? Colors.red : (_editingMsgId != null ? Colors.blue : const Color(0xFF00897B)), child: _isRecording ? const Icon(Icons.mic, color: Colors.white, size: 24) : Icon(_editingMsgId != null ? Icons.check : (_isTextEmpty ? Icons.mic_none : Icons.send), color: Colors.white, size: 24))),
             ]),
           ),
         ],
@@ -373,23 +381,22 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // ==============================================================================
-  // 🔥🔥🔥 ОНОВЛЕНА ЛОГІКА З APPTEXT ТА CREDENTIALS 🔥🔥🔥
+  // 🔥🔥🔥 СУЧАСНА ЛОГІКА V1 З ВИКОРИСТАННЯМ ФАЙЛУ CREDENTIALS.DART 🔥🔥🔥
   // ==============================================================================
 
   Future<void> _notifyRecipients(String messageText, {String? replyToName}) async {
     try {
       final myDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      final myName = myDoc.data()?['displayName'] ?? AppText.get('notif_new_msg');
+      final myName = myDoc.data()?['displayName'] ?? 'Нове повідомлення';
 
       String notificationType = widget.isDirect ? 'private_chat' : 'family_chat';
       String targetChatId = widget.chatId;
 
-      // 🔥 Формуємо перекладений заголовок і текст
-      String title = widget.isDirect ? myName : "${AppText.get('notif_family')}: $myName";
+      // Формуємо текст
+      String title = widget.isDirect ? myName : "Сім'я: $myName";
       String body = messageText;
-
       if (replyToName != null) {
-        body = "${AppText.get('notif_reply_to')} $replyToName: $messageText";
+        body = "↪️ Відповідь для $replyToName: $messageText";
       }
 
       if (widget.isDirect) {
@@ -437,16 +444,14 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _notifyLike(String messageSenderId, String messageText) async {
     try {
       final myDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      final myName = myDoc.data()?['displayName'] ?? AppText.get('notif_someone');
+      final myName = myDoc.data()?['displayName'] ?? 'Хтось';
 
       final senderDoc = await FirebaseFirestore.instance.collection('users').doc(messageSenderId).get();
       final token = senderDoc.data()?['fcmToken'];
 
       if (token != null) {
         String shortText = messageText.length > 20 ? '${messageText.substring(0, 20)}...' : messageText;
-
-        // 🔥 Перекладений текст лайку
-        String title = "❤️ $myName ${AppText.get('notif_liked')}:";
+        String title = "❤️ $myName вподобав(ла):";
         String body = "\"$shortText\"";
 
         String notificationType = widget.isDirect ? 'private_chat' : 'family_chat';
@@ -460,13 +465,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _sendPushV1(String token, String title, String body, String type, String chatId) async {
     try {
-      // ✅ БЕРЕМО КЛЮЧІ З ОКРЕМОГО ФАЙЛУ
+      // ✅ ТЕПЕР МИ БЕРЕМО КЛЮЧІ З ОКРЕМОГО ФАЙЛУ (credentials.dart)
       final accountCredentials = auth.ServiceAccountCredentials.fromJson(googleServiceAccount);
 
       final scopes = ['https://www.googleapis.com/auth/firebase.messaging'];
       final client = await auth.clientViaServiceAccount(accountCredentials, scopes);
 
       final response = await client.post(
+        // ID проєкту теж береться з файлу
         Uri.parse('https://fcm.googleapis.com/v1/projects/${googleServiceAccount['project_id']}/messages:send'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({

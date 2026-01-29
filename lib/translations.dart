@@ -1,21 +1,25 @@
 import 'global.dart';
 
 class AppText {
-  // 🔥 ЛОГІКА: Якщо мова не обрана, автоматично вмикаємо Українську
   static String get(String key) {
     String lang = languageNotifier.value;
-
     if (lang.isEmpty) {
       lang = 'Українська';
     }
-
     return _localizedValues[lang]?[key] ?? _localizedValues['English']?[key] ?? key;
   }
 
   static final Map<String, Map<String, String>> _localizedValues = {
     // 🇺🇦 УКРАЇНСЬКА
     'Українська': {
-      // Сповіщення та Чат
+      // 🔥 ПОМИЛКИ ВХОДУ (Auth Errors)
+      'err_login_bad': 'Невірна пошта або пароль',
+      'err_email_bad': 'Невірний формат пошти',
+      'err_pass_weak': 'Пароль занадто слабкий',
+      'err_user_exists': 'Ця пошта вже використовується',
+      'err_too_many_requests': 'Забагато спроб. Спробуйте пізніше',
+
+      // 🔥 Сповіщення та Чат
       'notif_family': 'Сім\'я',
       'notif_reply_to': '↪️ Відповідь для',
       'notif_liked': 'вподобав(ла)',
@@ -30,8 +34,10 @@ class AppText {
       'notif_warn_body': 'закінчується через 2 дні!',
       'notif_channel_name': 'Нагадування',
       'notif_channel_desc': 'Нагадування про продукти',
+      'chat_title': 'Сімейний чат',
+      'chat_hold_to_record': 'Утримуйте, щоб записати 🎤',
 
-      // AI & Recipes
+      // Інше
       'msg_ai_thinking': 'Шеф складає меню... 👨‍🍳',
       'err_invalid_ingredients': 'Це не схоже на їжу 🤔 Оберіть справжні продукти!',
       'ingredients_title': 'Інгредієнти (з холодильника):',
@@ -40,8 +46,6 @@ class AppText {
       'recipe_title': 'Рецепт ШІ',
       'err_recipe_failed': 'Не вдалося створити рецепт. Спробуйте ще раз.',
       'tag_healthy': 'Здорове харчування',
-
-      // Premium
       'prem_sub_active': 'Ваша підписка активна. Насолоджуйтесь усіма перевагами!',
       'prem_congrats': 'Вітаємо! Ви Premium! 🎉',
       'prem_btn_buy': 'Купити Premium',
@@ -56,8 +60,6 @@ class AppText {
       'ben_4': 'Розумніша модель GPT-4',
       'err_store': 'Помилка магазину',
       'msg_buy_error': 'Покупку скасовано',
-
-      // Помилки
       'err_user_not_found': 'Користувача не знайдено',
       'err_wrong_pass': 'Невірний пароль',
       'err_email_exist': 'Цей Email вже використовується',
@@ -79,21 +81,16 @@ class AppText {
       'msg_email_sent': 'Лист для відновлення паролю надіслано!',
       'msg_account_created': 'Акаунт успішно створено!',
       'msg_welcome': 'З поверненням!',
-
-      // Авторизація
       'login_title': 'Вхід', 'signup_title': 'Реєстрація', 'login_btn': 'Увійти',
       'signup_btn': 'Створити акаунт', 'name_field': 'Ім\'я', 'email_field': 'Електронна пошта',
       'password_field': 'Пароль', 'forgot_pass': 'Забули пароль?', 'no_account': 'Немає акаунту?',
       'create_one': 'Створити', 'has_account': 'Вже є акаунт?', 'enter_one': 'Увійти', 'or_continue': 'Або увійти через',
-
-      // UI елементи
       'saved_title': 'Збережені рецепти 📖', 'saved_empty': 'Ви ще нічого не зберегли',
       'msg_recipe_saved': 'Рецепт збережено! ❤️', 'msg_recipe_removed': 'Рецепт видалено з улюблених',
       'btn_saved_recipes': 'Мої Рецепти', 'limit_title': 'Ліміт на сьогодні 🛑',
       'limit_content': 'Ви використали 10 безкоштовних пошуків.\nЩоб готувати без обмежень, перейдіть на Premium!',
       'btn_premium': 'Premium', 'btn_ok': 'ОК', 'msg_select_products': 'Спочатку оберіть продукти зі списку!',
       'msg_code_copied': 'Код скопійовано! ✅', 'fam_wants_join': 'Хоче приєднатися', 'fam_you_tag': 'Я',
-
       'diet_title': 'Який режим харчування? 🥗', 'diet_standard': 'Звичайний (Все їм)',
       'diet_vegetarian': 'Вегетаріанське (Без м\'яса)', 'diet_vegan': 'Веганське (Тільки рослинне)',
       'diet_healthy': 'ПП (Здорове)', 'diet_keto': 'Кето (Без вуглеводів)',
@@ -101,33 +98,27 @@ class AppText {
       'btn_start_cooking': 'Знайти рецепти! 🚀', 'btn_yes': 'Так', 'btn_no': 'Ні',
       'dialog_delete_title': 'Видалити?', 'dialog_delete_content': 'Цю дію не можна скасувати.',
       'dialog_delete_confirm': 'Ви впевнені?',
-
       'chat_viewed_by': 'Бачили', 'chat_liked_by': 'Вподобали', 'chat_no_views': 'Ще ніхто',
       'chat_no_likes': 'Ще ніхто', 'suffix_me': ' (Я)', 'chat_reply': 'Відповісти',
       'chat_info': 'Інфо', 'chat_edit': 'Редагувати', 'chat_delete': 'Видалити',
-      'chat_personal': 'Особисті', 'chat_title': 'Сімейний Чат 💬', 'chat_hint': 'Написати повідомлення...',
+      'chat_personal': 'Особисті', 'chat_hint': 'Написати повідомлення...',
       'chat_no_messages': 'Поки немає повідомлень',
-
       'my_fridge': 'Мій Холодильник', 'add_product': 'Додати', 'edit_product': 'Редагувати',
       'product_name': 'Назва продукту', 'quantity': 'Кількість', 'days_valid': 'Придатний до:',
       'category_label': 'Категорія', 'save': 'Зберегти', 'add': 'Додати', 'cancel': 'Скасувати',
       'cook_btn': 'Готувати 🍳', 'empty_fridge': 'Холодильник порожній', 'cat_all': 'Всі',
       'cat_other': 'Інше', 'cat_meat': 'М\'ясо', 'cat_veg': 'Овочі', 'cat_fruit': 'Фрукти',
       'cat_dairy': 'Молочка', 'cat_bakery': 'Випічка', 'cat_sweet': 'Солодощі', 'cat_drink': 'Напої',
-
       'u_pcs': 'шт', 'u_kg': 'кг', 'u_g': 'г', 'u_l': 'л', 'u_ml': 'мл', 'u_days': 'дн.', 'u_months': 'міс.',
-
       'action_eaten': 'З\'їдено 😋', 'btn_buy': 'Купити знову', 'btn_restore': 'Відновити',
       'btn_delete_forever': 'Видалити', 'no_delete': 'Видалити цей продукт?', 'yes_list': '-> Холодильник',
       'trash_title': 'Смітник', 'trash_sub': 'Зіпсовані / Видалені', 'trash_empty': 'Пусто',
       'status_deleted': 'Видалено', 'status_rotten': 'Зіпсувалося', 'ago_suffix': 'тому',
       'msg_deleted_forever': 'Видалено назавжди', 'msg_restored': 'Відновлено', 'msg_change_date': 'Будь ласка, змініть дату!',
-
       'shopping_title': 'Список покупок 🛒', 'shopping_hint': 'Що треба купити?', 'list_empty': 'Список порожній',
       'list_empty_sub': 'Додайте сюди щось', 'rec_time': 'Час', 'rec_kcal': 'ккал', 'rec_veg': 'Вегетаріанське',
       'rec_non_veg': 'З м\'ясом', 'rec_ingredients': 'Інгредієнти', 'rec_steps': 'Кроки', 'rec_missing': 'Не вистачає:',
       'rec_cooking': 'Готуємо...', 'rec_step': 'Крок', 'rec_full_desc': 'Детальний опис',
-
       'stats_title': 'Еко-Статистика 📊', 'stat_no_data': 'Немає даних', 'stat_filter_week': 'Тиждень',
       'stat_filter_month': 'Місяць', 'stat_filter_all': 'Все', 'stat_eco_rating': 'Ефективність',
       'stat_great': 'Чудово!', 'stat_average': 'Норм', 'stat_bad': 'Погано', 'stat_total': 'Всього',
@@ -140,7 +131,7 @@ class AppText {
       'fam_member': 'Учасник', 'fam_me': ' (Я)', 'fam_requests': 'Запити на вступ', 'fam_welcome_title': 'Об\'єднайтеся з родиною!',
       'fam_welcome_desc': 'Створіть спільний простір для продуктів.',
 
-      // 🔥 FAQ (Українська - ДЕТАЛЬНО)
+      // 🔥 FAQ
       'faq_q1': 'Як додати продукт?',
       'faq_a1': 'Натисніть кнопку "+" внизу праворуч у вкладці "Мій Холодильник". Введіть назву, категорію та дату.',
       'faq_q2': 'Як видалити продукт?',
@@ -159,12 +150,21 @@ class AppText {
 
     // 🇺🇸 ENGLISH
     'English': {
+      // 🔥 AUTH ERRORS
+      'err_login_bad': 'Incorrect email or password',
+      'err_email_bad': 'Invalid email format',
+      'err_pass_weak': 'Password is too weak',
+      'err_user_exists': 'Email already in use',
+      'err_too_many_requests': 'Too many attempts. Try later',
+
       'notif_family': 'Family', 'notif_reply_to': '↪️ Reply to', 'notif_liked': 'liked', 'notif_new_msg': 'New message',
       'notif_someone': 'Someone', 'notif_batch_title': 'Attention! Food is spoiling ⏰', 'notif_batch_body': 'Need to eat:',
       'msg_name_changed': 'Name changed! ✅',
       'notif_instant_title': 'Rotten items', 'notif_instant_body': 'Important! Throw these away',
       'notif_warn_title': 'Eat me! ⏰', 'notif_warn_body': 'expires in 2 days!',
       'notif_channel_name': 'Reminders', 'notif_channel_desc': 'Product expiration reminders',
+      'chat_title': 'Family Chat',
+      'chat_hold_to_record': 'Hold to record 🎤',
 
       'msg_ai_thinking': 'Chef is thinking... 👨‍🍳', 'err_invalid_ingredients': 'Doesn\'t look like food 🤔 Use real ingredients!',
       'ingredients_title': 'Ingredients (From Fridge):', 'missing_title': 'Pantry / Missing Items:',
@@ -190,8 +190,8 @@ class AppText {
       'dialog_delete_content': 'Cannot be undone.', 'dialog_delete_confirm': 'Sure?', 'msg_code_copied': 'Copied! ✅',
       'fam_wants_join': 'Wants to join', 'fam_you_tag': 'YOU', 'chat_viewed_by': 'Seen by', 'chat_liked_by': 'Liked by',
       'chat_no_views': 'No views', 'chat_no_likes': 'No likes', 'suffix_me': ' (Me)', 'chat_reply': 'Reply',
-      'chat_info': 'Info', 'chat_edit': 'Edit', 'chat_delete': 'Delete', 'chat_personal': 'Personal',
-      'chat_title': 'Family Chat 💬', 'chat_hint': 'Type a message...', 'chat_no_messages': 'No messages yet',
+      'chat_info': 'Info', 'chat_edit': 'Edit', 'chat_delete': 'Delete', 'chat_personal': 'Personal', 'chat_hint': 'Type a message...',
+      'chat_no_messages': 'No messages yet',
       'login_title': 'Login', 'signup_title': 'Sign Up', 'login_btn': 'Login', 'signup_btn': 'Create Account',
       'name_field': 'Name', 'email_field': 'Email', 'password_field': 'Password', 'forgot_pass': 'Forgot Password?',
       'no_account': 'No account?', 'create_one': 'Create', 'has_account': 'Have account?', 'enter_one': 'Login',
@@ -218,7 +218,6 @@ class AppText {
       'fam_leave': 'Leave', 'fam_admin': 'Admin', 'fam_member': 'Member', 'fam_me': ' (Me)', 'fam_requests': 'Requests',
       'fam_welcome_title': 'Unite!', 'fam_welcome_desc': 'Share products.',
 
-      // 🔥 FAQ (English - DETAILED)
       'faq_q1': 'How to add a product?',
       'faq_a1': 'Go to the "My Fridge" tab and tap the "+" button in the bottom right. Enter the name, category, and expiry date.',
       'faq_q2': 'How to delete a product?',
@@ -237,12 +236,21 @@ class AppText {
 
     // 🇪🇸 ESPAÑOL
     'Español': {
+      // 🔥 AUTH ERRORS
+      'err_login_bad': 'Correo o contraseña incorrectos',
+      'err_email_bad': 'Formato de correo inválido',
+      'err_pass_weak': 'La contraseña es demasiado débil',
+      'err_user_exists': 'El correo ya está en uso',
+      'err_too_many_requests': 'Demasiados intentos. Intenta más tarde',
+
       'notif_family': 'Familia', 'notif_reply_to': '↪️ Responder a', 'notif_liked': 'le gustó', 'notif_new_msg': 'Nuevo mensaje',
       'notif_someone': 'Alguien', 'notif_batch_title': '¡Atención! Comida caducando ⏰', 'notif_batch_body': 'Comer pronto:',
       'msg_name_changed': '¡Nombre cambiado! ✅',
       'notif_instant_title': 'Productos podridos', 'notif_instant_body': '¡Importante! Tíralos ya',
       'notif_warn_title': '¡Cómeme! ⏰', 'notif_warn_body': 'caduca en 2 días!',
       'notif_channel_name': 'Recordatorios', 'notif_channel_desc': 'Recordatorios de caducidad',
+      'chat_title': 'Chat Familiar',
+      'chat_hold_to_record': 'Mantén presionado para grabar 🎤',
 
       'msg_ai_thinking': 'Chef pensando... 👨‍🍳', 'err_invalid_ingredients': '¡No parece comida! 🤔 ¡Elige productos reales!',
       'ingredients_title': 'Ingredientes:', 'missing_title': 'Falta:', 'recipe_steps': 'Pasos', 'recipe_title': 'Receta IA',
@@ -270,7 +278,9 @@ class AppText {
       'btn_premium': 'Premium', 'btn_ok': 'OK', 'msg_select_products': '¡Elige productos!', 'msg_code_copied': '¡Copiado!',
       'fam_wants_join': 'Quiere unirse', 'fam_you_tag': 'TÚ', 'chat_viewed_by': 'Visto por', 'chat_liked_by': 'Le gusta a',
       'chat_no_views': 'Nadie', 'chat_no_likes': 'Nadie', 'suffix_me': ' (Yo)', 'chat_reply': 'Responder', 'chat_info': 'Info',
-      'chat_edit': 'Editar', 'chat_delete': 'Borrar', 'chat_personal': 'Privado', 'u_days': 'd.', 'u_months': 'ms.',
+      'chat_edit': 'Editar', 'chat_delete': 'Borrar', 'chat_personal': 'Privado', 'chat_hint': 'Escribe un mensaje...',
+      'chat_no_messages': 'No hay mensajes',
+      'u_days': 'd.', 'u_months': 'ms.',
       'action_eaten': 'Comido 😋', 'btn_buy': 'Comprar', 'btn_restore': 'Restaurar', 'btn_delete_forever': 'Borrar',
       'no_delete': '¿Borrar?', 'yes_list': '-> Nevera', 'trash_title': 'Basura', 'trash_sub': 'Podridos', 'trash_empty': 'Vacía',
       'status_deleted': 'Borrado', 'status_rotten': 'Podrido', 'ago_suffix': 'atrás', 'msg_deleted_forever': 'Borrado',
@@ -284,7 +294,6 @@ class AppText {
       'fam_member': 'Miembro', 'fam_me': ' (Yo)', 'fam_requests': 'Solicitudes', 'fam_welcome_title': 'Familia',
       'fam_welcome_desc': 'Comparte productos.',
 
-      // 🔥 FAQ (Español - DETALLADO)
       'faq_q1': '¿Cómo añadir un producto?',
       'faq_a1': 'Toca el botón "+" en la esquina inferior derecha de la pestaña "Mi Nevera". Introduce el nombre, categoría y fecha de caducidad.',
       'faq_q2': '¿Cómo eliminar un producto?',
@@ -296,19 +305,28 @@ class AppText {
       'faq_q5': '¿Cómo restaurar un producto?',
       'faq_a5': 'Abre la "Papelera" (icono arriba a la derecha en la nevera). Busca el producto, toca el menú y selecciona "Restaurar".',
       'faq_q6': '¿Qué ofrece Premium?',
-      'faq_a6': 'Premium desbloquea el modo familiar, elimina anuncios, ofrece búsquedas ilimitadas de recetas y acceso al modelo GPT-4 más inteligente.',
+      'faq_a6': 'Premium desbloquea el modo familiar, elimina anuncios, ofrece búsquedas ilimitadas de recetas y acceso al modelo GPT-4.',
       'faq_q7': '¿Cómo contactar con soporte?',
       'faq_a7': 'Si tienes alguna pregunta, escríbenos al correo: pasalugovij@gmail.com. ¡Estaremos encantados de ayudarte!',
     },
 
     // 🇫🇷 FRANÇAIS
     'Français': {
+      // 🔥 AUTH ERRORS
+      'err_login_bad': 'Email ou mot de passe incorrect',
+      'err_email_bad': 'Format d\'email invalide',
+      'err_pass_weak': 'Le mot de passe est trop faible',
+      'err_user_exists': 'Cet email est déjà utilisé',
+      'err_too_many_requests': 'Trop de tentatives. Réessayez plus tard',
+
       'notif_family': 'Famille', 'notif_reply_to': '↪️ Répondre à', 'notif_liked': 'a aimé', 'notif_new_msg': 'Nouveau message',
       'notif_someone': 'Quelqu\'un', 'notif_batch_title': 'Attention ! Nourriture périmée ⏰', 'notif_batch_body': 'À manger :',
       'msg_name_changed': 'Nom modifié ! ✅',
       'notif_instant_title': 'Produits pourris', 'notif_instant_body': 'Important ! Jetez-les',
       'notif_warn_title': 'Mangez-moi ! ⏰', 'notif_warn_body': 'expire dans 2 jours !',
       'notif_channel_name': 'Rappels', 'notif_channel_desc': 'Rappels de péremption',
+      'chat_title': 'Chat Familial',
+      'chat_hold_to_record': 'Maintenez pour enregistrer 🎤',
 
       'msg_ai_thinking': 'Chef réfléchit... 👨‍🍳', 'err_invalid_ingredients': 'Ça ne ressemble pas à de la nourriture 🤔',
       'ingredients_title': 'Ingrédients :', 'missing_title': 'Manque :', 'recipe_steps': 'Étapes', 'recipe_title': 'Recette IA',
@@ -337,20 +355,20 @@ class AppText {
       'msg_select_products': 'Sélectionnez des produits !', 'msg_code_copied': 'Copié !', 'fam_wants_join': 'Veut rejoindre',
       'fam_you_tag': 'MOI', 'chat_viewed_by': 'Vu par', 'chat_liked_by': 'Aimé par', 'chat_no_views': 'Personne',
       'chat_no_likes': 'Personne', 'suffix_me': ' (Moi)', 'chat_reply': 'Répondre', 'chat_info': 'Info', 'chat_edit': 'Modifier',
-      'chat_delete': 'Supprimer', 'chat_personal': 'Privé', 'u_days': 'j.', 'u_months': 'ms.', 'action_eaten': 'Mangé 😋',
-      'btn_buy': 'Acheter', 'btn_restore': 'Restaurer', 'btn_delete_forever': 'Supprimer', 'no_delete': 'Supprimer ?',
-      'yes_list': '-> Frigo', 'trash_title': 'Corbeille', 'trash_sub': 'Pourri', 'trash_empty': 'Vide', 'status_deleted': 'Supprimé',
-      'status_rotten': 'Pourri', 'ago_suffix': 'il y a', 'msg_deleted_forever': 'Supprimé', 'msg_restored': 'Restauré',
-      'msg_change_date': 'Changez date !', 'stat_no_data': 'Rien', 'stat_filter_week': 'Semaine', 'stat_filter_month': 'Mois',
-      'stat_filter_all': 'Tout', 'stat_eco_rating': 'Efficacité', 'stat_great': 'Super !', 'stat_average': 'Moyen',
-      'stat_bad': 'Mauvais', 'stat_total': 'Total', 'stat_saved': 'Sauvé', 'stat_wasted': 'Gaspillé', 'stat_efficiency': 'Score',
+      'chat_delete': 'Supprimer', 'chat_personal': 'Privé', 'chat_hint': 'Tapez un message...', 'chat_no_messages': 'Aucun message',
+      'u_days': 'j.', 'u_months': 'ms.', 'action_eaten': 'Mangé 😋', 'btn_buy': 'Acheter', 'btn_restore': 'Restaurer',
+      'btn_delete_forever': 'Supprimer', 'no_delete': 'Supprimer ?', 'yes_list': '-> Frigo', 'trash_title': 'Corbeille',
+      'trash_sub': 'Pourri', 'trash_empty': 'Vide', 'status_deleted': 'Supprimé', 'status_rotten': 'Pourri',
+      'ago_suffix': 'il y a', 'msg_deleted_forever': 'Supprimé', 'msg_restored': 'Restauré', 'msg_change_date': 'Changez date !',
+      'stat_no_data': 'Rien', 'stat_filter_week': 'Semaine', 'stat_filter_month': 'Mois', 'stat_filter_all': 'Tout',
+      'stat_eco_rating': 'Efficacité', 'stat_great': 'Super !', 'stat_average': 'Moyen', 'stat_bad': 'Mauvais',
+      'stat_total': 'Total', 'stat_saved': 'Sauvé', 'stat_wasted': 'Gaspillé', 'stat_efficiency': 'Score',
       'stat_history': 'Historique', 'stat_empty_history': 'Vide', 'prem_btn_manage': 'Gérer', 'prem_btn_restore': 'Restaurer',
       'ben_1': 'Pas de pub', 'ben_2': 'Illimité', 'ben_3': 'Famille', 'ben_4': 'IA GPT-4', 'err_store': 'Erreur Store',
       'msg_buy_error': 'Echec', 'fam_create': 'Créer Famille', 'fam_join': 'Rejoindre', 'fam_code': 'Code :', 'fam_copy': 'Copier',
       'fam_members': 'Membres', 'fam_leave': 'Quitter', 'fam_admin': 'Admin', 'fam_member': 'Membre', 'fam_me': ' (Moi)',
       'fam_requests': 'Demandes', 'fam_welcome_title': 'Famille', 'fam_welcome_desc': 'Partagez.',
 
-      // 🔥 FAQ (Français - DÉTAILLÉ)
       'faq_q1': 'Comment ajouter un produit ?',
       'faq_a1': 'Appuyez sur le bouton "+" en bas à droite de l\'onglet "Mon Frigo". Entrez le nom, la catégorie et la date.',
       'faq_q2': 'Comment supprimer un produit ?',
@@ -369,12 +387,21 @@ class AppText {
 
     // 🇩🇪 DEUTSCH
     'Deutsch': {
+      // 🔥 AUTH ERRORS
+      'err_login_bad': 'Falsche E-Mail oder falsches Passwort',
+      'err_email_bad': 'Ungültiges E-Mail-Format',
+      'err_pass_weak': 'Das Passwort ist zu schwach',
+      'err_user_exists': 'E-Mail wird bereits verwendet',
+      'err_too_many_requests': 'Zu viele Versuche. Später versuchen',
+
       'notif_family': 'Familie', 'notif_reply_to': '↪️ Antwort an', 'notif_liked': 'gefällt', 'notif_new_msg': 'Neue Nachricht',
       'notif_someone': 'Jemand', 'notif_batch_title': 'Achtung! Essen verdirbt ⏰', 'notif_batch_body': 'Muss gegessen werden:',
       'msg_name_changed': 'Name geändert! ✅',
       'notif_instant_title': 'Verdorbene Produkte', 'notif_instant_body': 'Wichtig! Wegwerfen',
       'notif_warn_title': 'Iss mich! ⏰', 'notif_warn_body': 'läuft in 2 Tagen ab!',
       'notif_channel_name': 'Erinnerungen', 'notif_channel_desc': 'Ablauf-Erinnerungen',
+      'chat_title': 'Familienchat',
+      'chat_hold_to_record': 'Halten zum Aufnehmen 🎤',
 
       'msg_ai_thinking': 'Chef denkt... 👨‍🍳', 'err_invalid_ingredients': 'Kein echtes Essen 🤔',
       'ingredients_title': 'Zutaten:', 'missing_title': 'Fehlt:', 'recipe_steps': 'Schritte', 'recipe_title': 'KI Rezept',
@@ -404,21 +431,21 @@ class AppText {
       'msg_code_copied': 'Kopiert!', 'fam_wants_join': 'Will beitreten', 'fam_you_tag': 'ICH', 'chat_viewed_by': 'Gesehen',
       'chat_liked_by': 'Geliked', 'chat_no_views': 'Niemand', 'chat_no_likes': 'Niemand', 'suffix_me': ' (Ich)',
       'chat_reply': 'Antworten', 'chat_info': 'Info', 'chat_edit': 'Bearbeiten', 'chat_delete': 'Löschen',
-      'chat_personal': 'Privat', 'u_days': 't.', 'u_months': 'm.', 'action_eaten': 'Gegessen 😋', 'btn_buy': 'Kaufen',
-      'btn_restore': 'Retten', 'btn_delete_forever': 'Löschen', 'no_delete': 'Löschen?', 'yes_list': '-> Kühlschrank',
-      'trash_title': 'Müll', 'trash_sub': 'Verrottet', 'trash_empty': 'Leer', 'status_deleted': 'Gelöscht',
-      'status_rotten': 'Verrottet', 'ago_suffix': 'her', 'msg_deleted_forever': 'Weg', 'msg_restored': 'Gerettet',
-      'msg_change_date': 'Datum ändern!', 'stat_no_data': 'Keine Daten', 'stat_filter_week': 'Woche', 'stat_filter_month': 'Monat',
-      'stat_filter_all': 'Alle', 'stat_eco_rating': 'Effizienz', 'stat_great': 'Super!', 'stat_average': 'Ok',
-      'stat_bad': 'Schlecht', 'stat_total': 'Gesamt', 'stat_saved': 'Gerettet', 'stat_wasted': 'Verschwendet',
-      'stat_efficiency': 'Score', 'stat_history': 'Verlauf', 'stat_empty_history': 'Leer', 'prem_btn_manage': 'Verwalten',
-      'prem_btn_restore': 'Wiederherstellen', 'ben_1': 'Keine Werbung', 'ben_2': 'Unbegrenzt', 'ben_3': 'Familia',
-      'ben_4': 'GPT-4 KI', 'err_store': 'Store Fehler', 'msg_buy_error': 'Kauf fehlgeschlagen', 'fam_create': 'Familie +',
-      'fam_join': 'Beitreten', 'fam_code': 'Code:', 'fam_copy': 'Kopieren', 'fam_members': 'Mitglieder', 'fam_leave': 'Verlassen',
-      'fam_admin': 'Admin', 'fam_member': 'Mitglied', 'fam_me': ' (Ich)', 'fam_requests': 'Anfragen',
-      'fam_welcome_title': 'Vereinigen!', 'fam_welcome_desc': 'Teilen.',
+      'chat_personal': 'Privat', 'chat_hint': 'Eine Nachricht schreiben...', 'chat_no_messages': 'Keine Nachrichten',
+      'u_days': 't.', 'u_months': 'm.', 'action_eaten': 'Gegessen 😋', 'btn_buy': 'Kaufen', 'btn_restore': 'Retten',
+      'btn_delete_forever': 'Löschen', 'no_delete': 'Löschen?', 'yes_list': '-> Kühlschrank', 'trash_title': 'Müll',
+      'trash_sub': 'Verrottet', 'trash_empty': 'Leer', 'status_deleted': 'Gelöscht', 'status_rotten': 'Verrottet',
+      'ago_suffix': 'her', 'msg_deleted_forever': 'Weg', 'msg_restored': 'Gerettet', 'msg_change_date': 'Datum ändern!',
+      'stat_no_data': 'Keine Daten', 'stat_filter_week': 'Woche', 'stat_filter_month': 'Monat', 'stat_filter_all': 'Alle',
+      'stat_eco_rating': 'Effizienz', 'stat_great': 'Super!', 'stat_average': 'Ok', 'stat_bad': 'Schlecht',
+      'stat_total': 'Gesamt', 'stat_saved': 'Gerettet', 'stat_wasted': 'Verschwendet', 'stat_efficiency': 'Score',
+      'stat_history': 'Verlauf', 'stat_empty_history': 'Leer', 'prem_btn_manage': 'Verwalten', 'prem_btn_restore': 'Wiederherstellen',
+      'ben_1': 'Keine Werbung', 'ben_2': 'Unbegrenzt', 'ben_3': 'Familia', 'ben_4': 'GPT-4 KI', 'err_store': 'Store Fehler',
+      'msg_buy_error': 'Kauf fehlgeschlagen', 'fam_create': 'Familie +', 'fam_join': 'Beitreten', 'fam_code': 'Code:',
+      'fam_copy': 'Kopieren', 'fam_members': 'Mitglieder', 'fam_leave': 'Verlassen', 'fam_admin': 'Admin',
+      'fam_member': 'Mitglied', 'fam_me': ' (Ich)', 'fam_requests': 'Anfragen', 'fam_welcome_title': 'Vereinigen!',
+      'fam_welcome_desc': 'Teilen.',
 
-      // 🔥 FAQ (Deutsch - DETAILLIERT)
       'faq_q1': 'Wie füge ich ein Produkt hinzu?',
       'faq_a1': 'Tippen Sie auf den "+"-Button unten rechts im Reiter "Kühlschrank". Geben Sie Name, Kategorie und Ablaufdatum ein.',
       'faq_q2': 'Wie lösche ich ein Produkt?',

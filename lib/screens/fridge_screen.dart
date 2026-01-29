@@ -6,7 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // 👇 НЕ ЗАБУДЬ
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../recipe_model.dart';
 import '../ai_service.dart';
@@ -21,6 +21,7 @@ import '../utils/snackbar_utils.dart';
 import '../secrets.dart';
 import 'recipe_detail_screen.dart';
 
+// --- МОДЕЛІ ---
 class CategoryData {
   final String id;
   final IconData icon;
@@ -50,6 +51,7 @@ Locale getAppLocale(String langName) {
   }
 }
 
+// --- ГОЛОВНИЙ ВІДЖЕТ ---
 class FridgeContent extends StatefulWidget {
   const FridgeContent({super.key});
 
@@ -75,6 +77,7 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
     _setupNotifications();
   }
 
+  // --- ЛОГІКА СПОВІЩЕНЬ ---
   void _setupNotifications() {
     FirebaseFirestore.instance.collection('users').doc(user.uid).get().then((doc) {
       if (!mounted) return;
@@ -94,61 +97,62 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
     });
   }
 
-  // 🔥 ОНОВЛЕНИЙ МЕТОД З "АНТИ-СПАМОМ"
+  // 🔥 ОНОВЛЕНИЙ МЕТОД (Розумні нагадування + Анти-спам)
   void _scheduleAllNotifications(List<QueryDocumentSnapshot> docs) async {
-    // Скасовуємо старі таймери (щоб не було дублів)
+    // 1. Спочатку очищаємо старі таймери
     await NotificationService.cancelAll();
 
-    List<String> expiredItems = [];
+    List<String> urgentItems = []; // Ті, що псуються СЬОГОДНІ
     final now = DateTime.now();
 
     for (var doc in docs) {
       final product = Product.fromFirestore(doc);
       if (product.category == 'trash') continue;
 
-      // 1. Плануємо майбутні сповіщення (таймери)
-      // Ми ставимо таймер ТІЛЬКИ якщо дата ще попереду.
-      // NotificationService сам розбереться з zonedSchedule
-      if (product.expirationDate.isAfter(now)) {
-        await NotificationService.scheduleNotification(
-            product.id.hashCode,
-            product.name,
-            product.expirationDate
+      // 🔥 ПЛАНУЄМО МАЙБУТНІ СПОВІЩЕННЯ (На завтра і на день X)
+      // Це працює, навіть якщо додаток буде закритий
+      if (product.expirationDate.isAfter(now.subtract(const Duration(days: 1)))) {
+        await NotificationService.scheduleExpiryNotifications(
+          productId: product.id,
+          productName: product.name,
+          expirationDate: product.expirationDate,
         );
       }
 
-      // 2. Збираємо те, що ВЖЕ прострочено або псується завтра
+      // Збираємо список для миттєвого зведення (якщо відкрив додаток, а там вже біда)
       final daysLeft = product.expirationDate.difference(now).inDays;
-      if (daysLeft <= 1) {
-        expiredItems.add(product.name);
+      if (daysLeft <= 0) {
+        urgentItems.add(product.name);
       }
     }
 
-    // 3. РОЗУМНЕ ВІДОБРАЖЕННЯ (Тільки 1 раз на день)
-    if (expiredItems.isNotEmpty) {
+    // 2. Миттєве зведення (Анти-спам: показуємо тільки раз на день)
+    if (urgentItems.isNotEmpty) {
       final prefs = await SharedPreferences.getInstance();
       final String todayDate = "${now.year}-${now.month}-${now.day}";
       final String? lastShownDate = prefs.getString('last_expired_alert_date');
 
-      // Якщо сьогодні ще НЕ показували сповіщення - показуємо
       if (lastShownDate != todayDate) {
         String title = AppText.get('notif_instant_title');
         String bodyPrefix = AppText.get('notif_instant_body');
-        String listString = expiredItems.join(', ');
+        String listString = urgentItems.join(', ');
 
         await NotificationService.showNotification(
             id: 99999,
             title: title,
             body: "$bodyPrefix: $listString",
-            payload: 'fridge' // Щоб при кліку відкрило холодильник
+            payload: 'fridge'
         );
 
-        // Запам'ятовуємо, що сьогодні ми вже попередили користувача
         await prefs.setString('last_expired_alert_date', todayDate);
       }
+    } else {
+      // Якщо прострочених немає — прибираємо старе повідомлення
+      await NotificationService.cancelNotification(99999);
     }
   }
 
+  // --- РЕКЛАМА ---
   void _initAds() {
     AdService().init();
     if (!SubscriptionService().isPremium) {
@@ -158,7 +162,7 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
 
   void _loadBannerAd() {
     _bannerAd = BannerAd(
-      adUnitId: Secrets.adUnitId,
+      adUnitId: AdService().bannerAdUnitId,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
@@ -180,6 +184,7 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
     super.dispose();
   }
 
+  // --- FIREBASE helpers ---
   CollectionReference _getProductsCollection(String? householdId) {
     return (householdId != null)
         ? FirebaseFirestore.instance.collection('households').doc(householdId).collection('products')
@@ -192,6 +197,7 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
         : FirebaseFirestore.instance.collection('users').doc(user.uid).collection('shopping_list');
   }
 
+  // --- UI ACTIONS ---
   void _toggleSelection(String id) {
     setState(() {
       if (_selectedProductIds.contains(id)) {
@@ -203,13 +209,13 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
   }
 
   void _deleteProductForever(Product product, CollectionReference collection) {
-    NotificationService.cancelNotification(product.id.hashCode);
+    NotificationService.cancelForProduct(product.id);
     collection.doc(product.id).delete();
   }
 
   void _moveToTrash(Product product, CollectionReference collection) {
     collection.doc(product.id).update({'category': 'trash'});
-    NotificationService.cancelNotification(product.id.hashCode);
+    NotificationService.cancelForProduct(product.id);
   }
 
   Future<void> _moveFromTrashToShopList(Product product, CollectionReference fridgeCollection, CollectionReference listCollection) async {
@@ -234,6 +240,7 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
     }
   }
 
+  // --- ДІАЛОГИ ---
   void _confirmDeleteFromTrash(Product product, CollectionReference collection) {
     showDialog(
       context: context,
@@ -493,7 +500,7 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: Text(AppText.get('cancel'), style: TextStyle(fontSize: 16, color: textColor))),
-              ElevatedButton(onPressed: () async { if (nameController.text.isNotEmpty) { final qty = double.tryParse(qtyController.text) ?? 1.0; final data = {'name': nameController.text.trim(), 'expirationDate': Timestamp.fromDate(selectedDate), 'category': selectedCategory, 'quantity': qty, 'unit': selectedUnit}; if (isEditing) { await collection.doc(productToEdit.id).update(data); NotificationService.cancelNotification(productToEdit.id.hashCode); NotificationService.scheduleNotification(productToEdit.id.hashCode, nameController.text.trim(), selectedDate); } else { final docRef = await collection.add({...data, 'addedDate': Timestamp.now()}); NotificationService.scheduleNotification(docRef.id.hashCode, nameController.text.trim(), selectedDate); } Navigator.pop(context); } }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: Text(isEditing ? AppText.get('save') : AppText.get('add'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))
+              ElevatedButton(onPressed: () async { if (nameController.text.isNotEmpty) { final qty = double.tryParse(qtyController.text) ?? 1.0; final data = {'name': nameController.text.trim(), 'expirationDate': Timestamp.fromDate(selectedDate), 'category': selectedCategory, 'quantity': qty, 'unit': selectedUnit}; if (isEditing) { await collection.doc(productToEdit.id).update(data); NotificationService.cancelNotification(productToEdit.id.hashCode); } else { await collection.add({...data, 'addedDate': Timestamp.now()}); } Navigator.pop(context); } }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: Text(isEditing ? AppText.get('save') : AppText.get('add'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))
             ],
           );
         });
@@ -501,7 +508,7 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
     );
   }
 
-  // 🔥 МЕНЮ ВИБОРУ ДІЄТИ
+  // --- AI & RECIPES ---
   Future<void> _checkLimitAndSearch(List<Product> allProducts) async {
     if (_selectedProductIds.isEmpty) {
       SnackbarUtils.showWarning(context, AppText.get('msg_select_products'));
@@ -594,7 +601,6 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
   }
 
   Future<void> _searchRecipes(List<String> detailedIngredients) async {
-    // 🔥 МАЛЕНЬКИЙ КВАДРАТНИЙ ДІАЛОГ
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -634,7 +640,6 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
       if (mounted) {
         Navigator.pop(context);
 
-        // 🔥 Обробка помилок
         if (e.toString().contains('INVALID_INGREDIENTS')) {
           SnackbarUtils.showWarning(context, AppText.get('err_invalid_ingredients'));
         } else if (e.toString().contains('401')) {
@@ -780,6 +785,7 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
     );
   }
 
+  // 🔥 ОСЬ ЦЕЙ МЕТОД БУВ ПРОПУЩЕНИЙ
   @override
   Widget build(BuildContext context) {
     final textColor = Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
