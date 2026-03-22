@@ -9,7 +9,7 @@ const { GoogleGenerativeAI, SchemaType } = require("@google/generative-ai");
 initializeApp();
 
 // 🔥 ВСТАВ СВІЙ СКОПІЙОВАНИЙ КЛЮЧ GEMINI ОСЬ ТУТ:
-const GEMINI_API_KEY = "AIzaSyCqKinklrW4q53ye9NTSyqY9BnjrHN0L-0";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
