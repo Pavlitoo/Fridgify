@@ -8,7 +8,7 @@ const { GoogleGenerativeAI, SchemaType } = require("@google/generative-ai");
 
 initializeApp();
 
-// 🔥 ВСТАВ СВІЙ СКОПІЙОВАНИЙ КЛЮЧ GEMINI ОСЬ ТУТ:
+// Беремо ключ із прихованого файлу .env
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
@@ -67,7 +67,26 @@ exports.generateRecipes = onCall({ maxInstances: 10, memory: "512MiB" }, async (
   let dietInstruction = "Standard tasty food.";
   switch (dietType) { case 'vegetarian': dietInstruction = "Vegetarian (no meat)."; break; case 'vegan': dietInstruction = "Vegan (no animal products)."; break; case 'healthy': dietInstruction = "Healthy balanced diet (PP)."; break; case 'keto': dietInstruction = "Keto (low carb)."; break; }
 
-  const prompt = `📋 USER'S INPUT: ${ingredients.join(', ')}\n🗣️ TARGET LANGUAGE: ${userLanguage}\n🥗 DIET TYPE: ${dietInstruction}\n\nPHASE 1: VALIDATION\nCheck if ANY item in USER'S INPUT is garbage/non-food. If yes, ONLY set error = "INVALID_INGREDIENTS".\n\nPHASE 2: RECIPES\nIf valid, create EXACTLY 5 diverse recipes. "ingredients" array MUST contain ONLY items the user provided. "missingIngredients" array MUST contain all other required items. Use metric units. Translate everything to ${userLanguage}.`;
+  const prompt = `📋 USER'S INPUT: ${ingredients.join(', ')}
+🗣️ TARGET LANGUAGE: ${userLanguage}
+🥗 DIET TYPE: ${dietInstruction}
+
+PHASE 1: VALIDATION
+Check if ANY item in USER'S INPUT is garbage/non-food. If yes, ONLY set error = "INVALID_INGREDIENTS".
+
+PHASE 2: RECIPES
+If valid, create EXACTLY 5 diverse recipes.
+"ingredients" array MUST contain ONLY items the user provided.
+"missingIngredients" array MUST contain all other required items.
+Translate everything to ${userLanguage}.
+
+🔥 CRITICAL FORMATTING RULES:
+1. FOR INGREDIENTS ARRAYS ("ingredients" and "missingIngredients"):
+   Every single item MUST start with a number and a unit! Strictly use ONLY these units: g, kg, ml, l, pcs.
+   Format: "NUMBER UNIT NAME" (e.g., "200 g Chicken", "2 pcs Tomato", "5 g Salt"). NEVER return just the ingredient name.
+2. FOR INSTRUCTIONS ARRAY ("steps"):
+   Write the recipe steps in natural, conversational ${userLanguage}.
+   DO NOT use strict technical codes like "pcs" or "g" in the text. Translate quantities and product names into natural, grammatically correct language (e.g., instead of "0.5 pcs Капуста", write "половину капусти"; instead of "300 g Огірки", write "300 грамів огірків").`;
 
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });

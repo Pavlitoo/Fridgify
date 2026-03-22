@@ -7,11 +7,10 @@ import '../translations.dart';
 import '../utils/snackbar_utils.dart';
 
 class FridgeScanner {
-
   static Future<void> startScan(BuildContext context, CollectionReference collection, String userLang) async {
     final picker = ImagePicker();
 
-    // 1. ІДЕАЛЬНИЙ ДИЗАЙН ВИБОРУ ДЖЕРЕЛА (Камера / Галерея)
+    // 1. ВИБІР ДЖЕРЕЛА (Камера / Галерея)
     final ImageSource? source = await showDialog<ImageSource>(
         context: context,
         builder: (ctx) {
@@ -25,23 +24,18 @@ class FridgeScanner {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Верхня іконка-логотип
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), shape: BoxShape.circle),
                     child: const Icon(Icons.document_scanner_rounded, color: Colors.blue, size: 36),
                   ),
                   const SizedBox(height: 16),
-
-                  // Заголовок
                   Text(
                       AppText.get('scan_title'),
                       textAlign: TextAlign.center,
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: textColor)
                   ),
                   const SizedBox(height: 24),
-
-                  // Дві великі кнопки пліч-о-пліч
                   Row(
                     children: [
                       _buildOptionBtn(
@@ -74,34 +68,13 @@ class FridgeScanner {
     final XFile? image = await picker.pickImage(source: source, imageQuality: 80);
     if (image == null) return;
 
-    // 2. Красивий Лоадер аналізу
     if (!context.mounted) return;
+
+    // 2. КРАСИВИЙ АНІМОВАНИЙ ЛОАДЕР СКАНЕРА
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => Dialog(
-        backgroundColor: Theme.of(context).cardColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), shape: BoxShape.circle),
-                child: const CircularProgressIndicator(color: Colors.blue, strokeWidth: 4),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                AppText.get('scan_analyzing'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, height: 1.5),
-              ),
-            ],
-          ),
-        ),
-      ),
+      builder: (ctx) => _ScanningLoader(imageFile: File(image.path)),
     );
 
     try {
@@ -112,7 +85,9 @@ class FridgeScanner {
       );
 
       if (!context.mounted) return;
-      Navigator.pop(context); // Закриваємо лоадер
+
+      // Закриваємо красивий лоадер сканера
+      Navigator.of(context, rootNavigator: true).pop();
 
       if (items.isEmpty) {
         SnackbarUtils.showWarning(context, AppText.get('scan_not_found'));
@@ -124,13 +99,12 @@ class FridgeScanner {
 
     } catch (e) {
       if (context.mounted) {
-        Navigator.pop(context);
+        Navigator.of(context, rootNavigator: true).pop(); // Закриваємо лоадер у разі помилки
         SnackbarUtils.showError(context, "${AppText.get('scan_error')} $e");
       }
     }
   }
 
-  // 🔥 ДОПОМІЖНИЙ ВІДЖЕТ ДЛЯ КНОПОК ВИБОРУ ФОТО
   static Widget _buildOptionBtn(BuildContext context, {required String text, required IconData icon, required Color color, required ImageSource source}) {
     return Expanded(
       child: Material(
@@ -167,7 +141,7 @@ class FridgeScanner {
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (ctx) {
-          return StatefulBuilder(builder: (context, setModalState) {
+          return StatefulBuilder(builder: (sheetContext, setModalState) {
             final isDark = Theme.of(context).brightness == Brightness.dark;
             final textColor = Theme.of(context).textTheme.bodyLarge?.color;
 
@@ -233,8 +207,15 @@ class FridgeScanner {
                     padding: const EdgeInsets.only(bottom: 30, top: 10),
                     child: ElevatedButton.icon(
                       onPressed: confirmedItems.isEmpty ? null : () async {
+                        // 1. Спочатку закриваємо BottomSheet
                         Navigator.pop(ctx);
-                        showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+
+                        // 2. Показуємо лоадер збереження (ЗІ СВОЇМ ВЛАСНИМ КОНТЕКСТОМ)
+                        showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (dialogCtx) => const Center(child: CircularProgressIndicator())
+                        );
 
                         try {
                           final batch = FirebaseFirestore.instance.batch();
@@ -255,12 +236,13 @@ class FridgeScanner {
                           await batch.commit();
 
                           if (context.mounted) {
-                            Navigator.pop(context);
+                            // 3. ФІКС ВІЧНОГО СПІНЕРА: закриваємо найвищий діалог надійно
+                            Navigator.of(context, rootNavigator: true).pop();
                             SnackbarUtils.showSuccess(context, AppText.get('scan_success'));
                           }
                         } catch (e) {
                           if (context.mounted) {
-                            Navigator.pop(context);
+                            Navigator.of(context, rootNavigator: true).pop();
                             SnackbarUtils.showError(context, "${AppText.get('scan_error')} $e");
                           }
                         }
@@ -279,6 +261,137 @@ class FridgeScanner {
             );
           });
         }
+    );
+  }
+}
+
+// ============================================================================
+// 🔥 НОВИЙ ВІДЖЕТ АНІМОВАНОГО СКАНЕРА
+// ============================================================================
+class _ScanningLoader extends StatefulWidget {
+  final File imageFile;
+
+  const _ScanningLoader({required this.imageFile});
+
+  @override
+  State<_ScanningLoader> createState() => _ScanningLoaderState();
+}
+
+class _ScanningLoaderState extends State<_ScanningLoader> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    // Анімація триває 2 секунди вниз, і 2 секунди вгору (reverse)
+    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 2))
+      ..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Блок з картинкою та лазером
+          ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: SizedBox(
+              width: 280,
+              height: 380,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Оригінальне фото
+                  Image.file(widget.imageFile, fit: BoxFit.cover),
+
+                  // Легке затемнення, щоб лазер виглядав яскравіше
+                  Container(color: Colors.black.withOpacity(0.3)),
+
+                  // Лазер, що рухається
+                  AnimatedBuilder(
+                    animation: _controller,
+                    builder: (context, child) {
+                      return Positioned(
+                        top: _controller.value * 350, // Рух від 0 до 350px вниз
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          height: 30,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.blueAccent.withOpacity(0.0),
+                                Colors.blueAccent.withOpacity(0.8),
+                                Colors.cyanAccent,
+                              ],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.blueAccent.withOpacity(0.5),
+                                blurRadius: 15,
+                                spreadRadius: 5,
+                                offset: const Offset(0, 0),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
+                  // Декоративна рамка сканера ("приціл")
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.blueAccent.withOpacity(0.5), width: 2),
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Текст "Аналізуємо..."
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))
+                ]
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.blue)),
+                const SizedBox(width: 16),
+                Text(
+                  AppText.get('scan_analyzing'),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Theme.of(context).textTheme.bodyLarge?.color),
+                ),
+              ],
+            ),
+          )
+        ],
+      ),
     );
   }
 }
