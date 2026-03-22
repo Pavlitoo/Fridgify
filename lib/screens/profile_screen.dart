@@ -179,11 +179,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
         leading: Text(flag, style: const TextStyle(fontSize: 24)),
         title: Text(lang),
         onTap: () async {
+          // 1. Змінюємо мову локально в додатку
           languageNotifier.value = lang;
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('language', lang);
           _updateSettings('language', lang);
-          Navigator.pop(context);
+
+          // 🔥 2. ДОДАНО: Зберігаємо код мови в Firestore для серверних пушів
+          String langCode = 'en'; // Дефолтна мова
+          if (lang == 'Українська') langCode = 'uk';
+          else if (lang == 'Español') langCode = 'es';
+          else if (lang == 'Français') langCode = 'fr';
+          else if (lang == 'Deutsch') langCode = 'de';
+
+          try {
+            await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+              'language': langCode,
+            }, SetOptions(merge: true));
+            debugPrint("🌍 Мову ($langCode) збережено в Firestore");
+          } catch (e) {
+            debugPrint("❌ Помилка збереження мови: $e");
+          }
+
+          if (mounted) {
+            Navigator.pop(context);
+          }
         }
     );
   }
@@ -271,7 +291,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const Divider(height: 1),
 
                   // 🔥 ВИПРАВЛЕНО: Текст мови
-                  ListTile(contentPadding: tilePadding, leading: _buildIcon(Icons.language, Colors.blue), title: Text(AppText.get('language'), style: _tileStyle(textColor)), trailing: _arrow(), onTap: () => _showLanguageDialog()),
+                  ListTile(contentPadding: tilePadding, leading: _buildIcon(Icons.language, Colors.blue), title: Text(AppText.get('select_lang'), style: _tileStyle(textColor)), trailing: _arrow(), onTap: () => _showLanguageDialog()),
                 ])),
               ]),
             ),

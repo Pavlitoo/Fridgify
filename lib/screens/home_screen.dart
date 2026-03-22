@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:app_links/app_links.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../translations.dart';
-import '../main.dart'; // Тут лежить globalTabIndex
+import '../main.dart';
 import '../household_service.dart';
 import 'shopping_list_screen.dart';
 import 'profile_screen.dart';
@@ -16,7 +16,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // Використовуємо глобальну змінну, щоб при кліку на сповіщення відкривався холодильник
   int _selectedIndex = globalTabIndex;
 
   static const List<Widget> _pages = [
@@ -32,24 +31,16 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _initDeepLinks();
-    // Сповіщення тепер ініціалізуються в main.dart і керуються в fridge_screen.dart
-    // Тут їх викликати НЕ ТРЕБА.
   }
 
-  // --- ЛОГІКА DEEP LINKS (Запрошення в сім'ю) ---
   Future<void> _initDeepLinks() async {
     _appLinks = AppLinks();
-
-    // Перевірка посилання при холодному старті
     final Uri? initialUri = await _appLinks.getInitialLink();
     if (initialUri != null) _handleLink(initialUri);
-
-    // Слухаємо посилання, коли додаток вже відкрито
     _linkSubscription = _appLinks.uriLinkStream.listen((uri) => _handleLink(uri));
   }
 
   void _handleLink(Uri uri) {
-    // Формат: fridgify://invite?code=123456
     if (uri.scheme == 'fridgify' && uri.host == 'invite') {
       final code = uri.queryParameters['code'];
       if (code != null) _showJoinDialog(code);
@@ -58,9 +49,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showJoinDialog(String code) {
     showDialog(context: context, builder: (ctx) => AlertDialog(
-      backgroundColor: Theme.of(context).cardTheme.color,
       title: Text(AppText.get('fam_welcome_title')),
-      content: Text("${AppText.get('fam_join')}: $code\n\n?"),
+      content: Text("${AppText.get('fam_join')}: $code?"),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppText.get('cancel'))),
         ElevatedButton(onPressed: () {
@@ -88,15 +78,20 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Відображаємо сторінку відповідно до індексу
-      body: _pages[_selectedIndex],
+      // 🔥 ФІКС: Використовуємо IndexedStack для миттєвого перемикання без лагів
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _pages,
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (i) {
           setState(() => _selectedIndex = i);
-          globalTabIndex = i; // Оновлюємо глобальний індекс
+          globalTabIndex = i;
         },
-        backgroundColor: null,
+        // 🔥 ФІКС: Прибираємо зайві кольорові ефекти
+        surfaceTintColor: Colors.transparent,
+        backgroundColor: Theme.of(context).navigationBarTheme.backgroundColor,
         destinations: const <Widget>[
           NavigationDestination(
               selectedIcon: Icon(Icons.kitchen),

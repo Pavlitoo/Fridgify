@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../translations.dart';
-import '../error_handler.dart'; // 👇 Імпорт обробника помилок
+import '../error_handler.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -29,9 +29,10 @@ class _StatsScreenState extends State<StatsScreen> {
     if (_timeFilter == 'all') return docs;
 
     final now = DateTime.now();
+    // 🔥 Виправили: Місяць тепер завжди означає останні 30 днів
     final limitDate = _timeFilter == 'week'
         ? now.subtract(const Duration(days: 7))
-        : DateTime(now.year, now.month, 1);
+        : now.subtract(const Duration(days: 30));
 
     return docs.where((doc) {
       final data = doc.data() as Map<String, dynamic>;
@@ -65,7 +66,6 @@ class _StatsScreenState extends State<StatsScreen> {
             .snapshots(),
         builder: (context, snapshot) {
 
-          // 🔥 ВИКОРИСТАННЯ ERROR HANDLER
           if (snapshot.hasError) {
             return Center(
               child: Padding(
@@ -76,7 +76,7 @@ class _StatsScreenState extends State<StatsScreen> {
                     const Icon(Icons.error_outline, color: Colors.red, size: 60),
                     const SizedBox(height: 10),
                     Text(
-                      ErrorHandler.getMessage(snapshot.error!), // Переклад помилки
+                      ErrorHandler.getMessage(snapshot.error!),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: textColor, fontSize: 16),
                     ),
@@ -203,13 +203,14 @@ class _StatsScreenState extends State<StatsScreen> {
                                 radius: _touchedIndex == 0 ? 65 : 55,
                                 titleStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                               ),
-                              PieChartSectionData(
-                                color: const Color(0xFFEF5350),
-                                value: wasted.toDouble(),
-                                title: '${((wasted / total) * 100).toStringAsFixed(0)}%',
-                                radius: _touchedIndex == 1 ? 65 : 55,
-                                titleStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                              ),
+                              if (wasted > 0)
+                                PieChartSectionData(
+                                  color: const Color(0xFFEF5350),
+                                  value: wasted.toDouble(),
+                                  title: '${((wasted / total) * 100).toStringAsFixed(0)}%',
+                                  radius: _touchedIndex == 1 ? 65 : 55,
+                                  titleStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                                ),
                             ],
                           ),
                         ),

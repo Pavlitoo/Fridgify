@@ -6,6 +6,36 @@ import '../global.dart';
 import '../error_handler.dart';
 import '../utils/snackbar_utils.dart'; // ✅ Гарні повідомлення
 
+// --- МОДЕЛІ КАТЕГОРІЙ (для віконця) ---
+class CategoryData {
+  final String id;
+  final IconData icon;
+  final Color color;
+  final String labelKey;
+  CategoryData(this.id, this.icon, this.color, this.labelKey);
+}
+
+final List<CategoryData> appCategories = [
+  CategoryData('other', Icons.fastfood, Colors.grey, 'cat_other'),
+  CategoryData('meat', Icons.set_meal, Colors.red, 'cat_meat'),
+  CategoryData('veg', Icons.eco, Colors.green, 'cat_veg'),
+  CategoryData('fruit', Icons.apple, Colors.orange, 'cat_fruit'),
+  CategoryData('dairy', Icons.egg, Colors.blueGrey, 'cat_dairy'),
+  CategoryData('bakery', Icons.breakfast_dining, Colors.brown, 'cat_bakery'),
+  CategoryData('sweet', Icons.cake, Colors.pink, 'cat_sweet'),
+  CategoryData('drink', Icons.local_drink, Colors.blue, 'cat_drink'),
+];
+
+Locale getAppLocale(String langName) {
+  switch (langName) {
+    case 'Українська': return const Locale('uk', 'UA');
+    case 'Español': return const Locale('es', 'ES');
+    case 'Français': return const Locale('fr', 'FR');
+    case 'Deutsch': return const Locale('de', 'DE');
+    default: return const Locale('en', 'US');
+  }
+}
+
 class ShoppingListScreen extends StatefulWidget {
   const ShoppingListScreen({super.key});
 
@@ -51,36 +81,105 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     }
   }
 
-  Future<void> _buyItem(String docId, Map<String, dynamic> data, String? householdId) async {
-    try {
-      final fridgeCol = _getFridgeCollection(householdId);
+  // 🔥 НОВЕ: Красиве вікно при покупці зі списку
+  Future<bool> _showBuyDialog(String docId, Map<String, dynamic> data, String? householdId) async {
+    final nameController = TextEditingController(text: data['name']);
+    final qtyController = TextEditingController(text: data['quantity'].toString());
+    String selectedUnit = data['unit'] ?? 'pcs';
+    DateTime selectedDate = DateTime.now().add(const Duration(days: 7));
+    String selectedCategory = 'other';
 
-      // Додаємо в холодильник
-      await fridgeCol.add({
-        'name': data['name'],
-        'quantity': data['quantity'],
-        'unit': data['unit'],
-        'category': 'other', // Можна зробити автовизначення категорії, якщо треба
-        'expirationDate': Timestamp.fromDate(DateTime.now().add(const Duration(days: 7))),
-        'addedDate': Timestamp.now(),
-      });
+    bool isAddedToFridge = false;
 
-      // Видаляємо зі списку покупок
-      final listCol = _getListCollection(householdId);
-      await listCol.doc(docId).delete();
+    await showDialog(
+      context: context,
+      barrierDismissible: false, // Не даємо закрити кліком повз, тільки кнопками
+      builder: (context) {
+        return StatefulBuilder(builder: (context, setDialogState) {
+          String formattedDate = "${selectedDate.day.toString().padLeft(2, '0')}/${selectedDate.month.toString().padLeft(2, '0')}/${selectedDate.year}";
+          final dialogBg = Theme.of(context).cardColor;
+          final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+          final inputFill = Theme.of(context).scaffoldBackgroundColor;
 
-      if (mounted) {
-        // ✅ Гарне повідомлення про покупку
-        SnackbarUtils.showSuccess(context, "✅ ${data['name']} -> ${AppText.get('my_fridge')}");
-      }
-    } catch (e) {
-      if (mounted) SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
-    }
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            backgroundColor: dialogBg,
+            contentPadding: const EdgeInsets.all(24),
+            title: Text(AppText.get('add_product'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: textColor), textAlign: TextAlign.center),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(controller: nameController, style: TextStyle(fontSize: 18, color: textColor), decoration: InputDecoration(hintText: AppText.get('product_name'), hintStyle: const TextStyle(color: Colors.grey), prefixIcon: const Icon(Icons.edit, color: Colors.green), filled: true, fillColor: inputFill, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none))),
+                    const SizedBox(height: 16),
+                    Row(children: [
+                      Expanded(child: TextField(controller: qtyController, keyboardType: const TextInputType.numberWithOptions(decimal: true), style: TextStyle(color: textColor), decoration: InputDecoration(hintText: AppText.get('quantity'), hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: inputFill, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)))),
+                      const SizedBox(width: 12),
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 12), decoration: BoxDecoration(color: inputFill, borderRadius: BorderRadius.circular(16)), child: DropdownButtonHideUnderline(child: DropdownButton<String>(dropdownColor: dialogBg, value: selectedUnit, style: TextStyle(color: textColor), onChanged: (val) => setDialogState(() => selectedUnit = val!), items: ['pcs', 'kg', 'g', 'l', 'ml'].map((unit) { return DropdownMenuItem(value: unit, child: Text(AppText.get('u_$unit'), style: TextStyle(color: textColor))); }).toList())))
+                    ]),
+                    const SizedBox(height: 24),
+                    Text(AppText.get('category_label'), style: TextStyle(color: textColor?.withOpacity(0.7), fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 10, children: appCategories.map((cat) { final isSelected = selectedCategory == cat.id; return InkWell(onTap: () => setDialogState(() => selectedCategory = cat.id), child: Column(mainAxisSize: MainAxisSize.min, children: [AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: isSelected ? cat.color : inputFill, shape: BoxShape.circle, boxShadow: isSelected ? [BoxShadow(color: cat.color.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))] : []), child: Icon(cat.icon, color: isSelected ? Colors.white : Colors.grey, size: 28)), const SizedBox(height: 4), Text(AppText.get(cat.labelKey), style: TextStyle(fontSize: 10, color: isSelected ? cat.color : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal))])); }).toList()),
+                    const SizedBox(height: 30),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Text(AppText.get('days_valid'), style: TextStyle(fontSize: 16, color: textColor?.withOpacity(0.7))),
+                      InkWell(onTap: () async { final DateTime? picked = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365 * 10)), locale: getAppLocale(languageNotifier.value)); if (picked != null && picked != selectedDate) { setDialogState(() { selectedDate = picked; }); } }, child: Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), decoration: BoxDecoration(color: Colors.green.shade50.withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green)), child: Row(children: [const Icon(Icons.calendar_today, size: 18, color: Colors.green), const SizedBox(width: 8), Text(formattedDate, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16))]))),
+                    ])
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () {
+                    Navigator.pop(context); // Просто закриваємо
+                  },
+                  child: Text(AppText.get('cancel'), style: TextStyle(fontSize: 16, color: textColor))
+              ),
+              ElevatedButton(
+                  onPressed: () async {
+                    if (nameController.text.isNotEmpty) {
+                      final qty = double.tryParse(qtyController.text) ?? 1.0;
+                      final fridgeCol = _getFridgeCollection(householdId);
+
+                      // Додаємо в холодильник з усіма налаштуваннями
+                      await fridgeCol.add({
+                        'name': nameController.text.trim(),
+                        'expirationDate': Timestamp.fromDate(selectedDate),
+                        'category': selectedCategory,
+                        'quantity': qty,
+                        'unit': selectedUnit,
+                        'addedDate': Timestamp.now()
+                      });
+
+                      // Видаляємо зі списку покупок
+                      final listCol = _getListCollection(householdId);
+                      await listCol.doc(docId).delete();
+
+                      isAddedToFridge = true;
+                      if (mounted) {
+                        Navigator.pop(context);
+                        SnackbarUtils.showSuccess(context, "✅ ${nameController.text.trim()} -> ${AppText.get('my_fridge')}");
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  child: Text(AppText.get('save'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))
+              )
+            ],
+          );
+        });
+      },
+    );
+
+    return isAddedToFridge; // Повертаємо результат (true = видалити зі списку, false = повернути на місце)
   }
 
   void _deleteItem(String docId, CollectionReference collection, String name) {
     collection.doc(docId).delete();
-    // ✅ Гарне повідомлення про видалення
     if (mounted) {
       SnackbarUtils.showWarning(context, "🗑 $name ${AppText.get('status_deleted')}");
     }
@@ -229,7 +328,6 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
                         return Dismissible(
                           key: Key(docId),
-                          // 🔥 ДОЗВОЛЯЄМО СВАЙП В ОБИДВІ СТОРОНИ
                           direction: DismissDirection.horizontal,
 
                           // Свайп вправо (Купити -> Холодильник)
@@ -263,12 +361,20 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                             ),
                           ),
 
-                          onDismissed: (direction) {
+                          // 🔥 ВИКОРИСТОВУЄМО confirmDismiss для перехоплення свайпу
+                          confirmDismiss: (direction) async {
                             if (direction == DismissDirection.startToEnd) {
-                              // Свайп вправо -> Купити
-                              _buyItem(docId, data, householdId);
+                              // Свайп вправо: Відкриваємо діалог покупки
+                              return await _showBuyDialog(docId, data, householdId);
                             } else {
-                              // Свайп вліво -> Видалити
+                              // Свайп вліво: Дозволяємо миттєве візуальне видалення
+                              return true;
+                            }
+                          },
+
+                          // onDismissed тепер потрібен тільки для свайпу вліво (видалення з бази)
+                          onDismissed: (direction) {
+                            if (direction == DismissDirection.endToStart) {
                               _deleteItem(docId, collection, data['name']);
                             }
                           },
@@ -281,7 +387,6 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                               boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
                             ),
                             child: ListTile(
-                              // 🔥 ЗАМІНИВ КРУЖЕЧОК НА ІКОНКУ ПОКУПКИ
                               leading: Icon(Icons.shopping_bag_outlined, color: isDark ? Colors.grey : Colors.grey.shade400),
                               title: Text(
                                   data['name'],
