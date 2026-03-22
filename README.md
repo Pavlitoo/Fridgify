@@ -1,92 +1,98 @@
-# 🍎 Fridgify
+# 🍎 Fridgify: Your AI-Powered Smart Kitchen Assistant
 
-![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?style=for-the-badge&logo=Flutter&logoColor=white)
-![Firebase](https://img.shields.io/badge/Firebase-039BE5?style=for-the-badge&logo=Firebase&logoColor=white)
-![Dart](https://img.shields.io/badge/dart-%230175C2.svg?style=for-the-badge&logo=dart&logoColor=white)
-![AdMob](https://img.shields.io/badge/AdMob-EA4335?style=for-the-badge&logo=googleadmob&logoColor=white)
-![FCM](https://img.shields.io/badge/FCM_v1-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)
-![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
+<div align="center">
+  <img src="https://img.shields.io/badge/Flutter-%2302569B.svg?style=for-the-badge&logo=Flutter&logoColor=white" alt="Flutter" />
+  <img src="https://img.shields.io/badge/Firebase-039BE5?style=for-the-badge&logo=Firebase&logoColor=white" alt="Firebase" />
+  <img src="https://img.shields.io/badge/Gemini_AI-8E75B2?style=for-the-badge&logo=googlebard&logoColor=white" alt="Gemini AI" />
+  <img src="https://img.shields.io/badge/Cloud_Functions-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white" alt="Cloud Functions" />
+  <img src="https://img.shields.io/badge/AdMob-EA4335?style=for-the-badge&logo=googleadmob&logoColor=white" alt="AdMob" />
+  <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License" />
+</div>
 
-**Fridgify** — це твій розумний еко-помічник для кухні. Додаток допомагає керувати продуктами, зменшувати кількість харчових відходів, економити гроші та координувати сімейні покупки. Використовує передовий ШІ для створення рецептів та потужну систему сповіщень, щоб ви ніколи не забували про продукти.
+<br/>
 
----
-
-## ✨ Основні можливості
-
-### 🥦 Розумний Холодильник & Сповіщення
-* **Облік продуктів:** Додавання з фото, категорією, кількістю та терміном придатності.
-* **Контроль свіжості:** Кольорова індикація (🟢 свіже, 🟠 скоро зіпсується, 🔴 прострочено).
-* **Smart Push-сповіщення:** Автоматичні нагадування про продукти, що псуються ("З'їж мене!"), навіть якщо додаток закрито.
-* **Смітник:** Можливість відновлення видалених продуктів або їх переміщення у список покупок (аналіз втрат).
-
-### 👨‍🍳 AI Шеф-кухар (GPT-4o)
-* **Розумний пошук:** Генерує 5 унікальних рецептів на основі обраних продуктів.
-* **Фото страв:** Автоматичний підбір реалістичних зображень готових страв.
-* **Деталізація:** Калорійність, час приготування, покрокова інструкція та список відсутніх інгредієнтів.
-
-### 🛒 Розумний Список Покупок
-* Синхронізація списку в реальному часі для всієї сім'ї.
-* **Швидкі дії:** Свайп вліво — купив (у холодильник), свайп вправо — видалити.
-* Підтримка різних одиниць виміру (шт, кг, л, мл).
-
-### 👨‍👩‍👧‍👦 Сімейний доступ (Premium)
-* Створення "Дому" та запрошення рідних за унікальним кодом.
-* Спільний холодильник та список покупок.
-* **Потужний Месенджер:** * Особисті та сімейні чати.
-    * **Голосові повідомлення** та фото.
-    * **Реакції (Лайки)** ❤️ та **Відповіді (Reply)** ↪️ на повідомлення.
-    * **Deep Linking:** Клік на Push-сповіщення відкриває конкретний чат.
-
-### 📊 Еко-Статистика та Допомога
-* Аналіз ефективності: графіки врятованих (з'їдених) та втрачених (зіпсованих) продуктів.
-* **FAQ:** Детальний розділ допомоги 5-ма мовами.
-* **Геолокація:** Швидкий пошук вашого місцезнаходження на карті.
+**Fridgify** — це сучасний кросплатформний додаток, створений для керування продуктами, зменшення харчових відходів та економії грошей. Завдяки інтеграції передового штучного інтелекту (**Google Gemini**) та хмарних технологій, додаток не лише нагадує про терміни придатності, але й буквально бачить ваші продукти через камеру та самостійно придумує, що з них приготувати.
 
 ---
 
-## 💎 Монетизація та Premium
+## ✨ Головні інновації (Що нового)
 
-Додаток використовує гібридну модель монетизації:
+### 📸 AI Vision: Розумний сканер холодильника
+* **Scan & Go:** Більше не потрібно вводити продукти вручну. Просто зробіть фото вмісту холодильника.
+* **Аналіз зображень:** Штучний інтелект (Gemini 2.5 Flash Vision) миттєво розпізнає продукти на фото, визначає їхню категорію та приблизну кількість/вагу.
+* **Автоматизація:** Розпізнані продукти одним кліком додаються до вашого цифрового холодильника.
 
-1.  **Freemium (Безкоштовно):**
-    * Базовий доступ до функцій.
-    * Рекламні банери (AdMob).
-    * Ліміт на пошук рецептів (перші 3 без реклами, далі — за перегляд відео).
-2.  **Premium Підписка (Google Play Billing):**
+### 🧠 AI Chef: Генерація рецептів (Powered by Gemini)
+* **Smart Context:** Алгоритм аналізує наявні продукти і пропонує **5 унікальних рецептів**, мінімізуючи потребу йти в магазин.
+* **Підтримка дієт:** Генерація страв адаптується під ваші потреби (Вегетаріанська, Веганська, Кето, Здорове харчування).
+* **Повна деталізація:** Кожен рецепт містить калорійність (Ккал), час приготування, покрокову інструкцію та список інгредієнтів, яких не вистачає.
+
+### 🔒 Сучасна Auth-система
+* **Оновлений UI/UX:** Плавні анімації, динамічні форми та інтуїтивно зрозумілий дизайн авторизації.
+* **Безпека:** Залізобетонна логіка перевірки email (Verification Link) та ізольований `AuthService`.
+* **Social Login:** Інтегрований вхід через Google та GitHub.
+
+### ☁️ Serverless Архітектура (Firebase Cloud Functions)
+Уся важка логіка винесена на безпечний бекенд:
+* **Cron Jobs (Планувальники):** Автоматична щоденна перевірка термінів придатності.
+* **Smart Push Notifications:** Сервер сам аналізує ваш холодильник і надсилає таргетовані FCM-сповіщення (наприклад, *"З'їжте сир, він псується завтра!"* або вечірнє нагадування згенерувати рецепт).
+* **Secure API:** API ключі ШІ надійно сховані на сервері (через `.env`), додаток взаємодіє з ними лише через авторизовані `onCall` функції.
+
+---
+
+## 👨‍👩‍👧‍👦 Базовий функціонал
+
+* **Облік продуктів:** Зручне додавання, кольорова індикація свіжості (🟢 свіже, 🟠 скоро зіпсується, 🔴 прострочено).
+* **Кошик / Смітник:** Система "м'якого видалення" з можливістю відновити продукт або перенести його у Список покупок.
+* **Синхронізований Список Покупок:** Швидкі свайпи для управління (купив/видалив), підтримка метричної системи (кг, г, л, мл, шт).
+* **Сімейний доступ (Premium):** Спільний холодильник, списки покупок та внутрішній **Family Messenger** (голосові повідомлення, фото, реплай, реакції ❤️).
+* **Deep Linking:** Клік на пуш-сповіщення відкриває конкретний екран або чат у додатку.
+* **Еко-Статистика:** Наочні графіки (FlChart) врятованої та зіпсованої їжі.
+* **Мультомовність:** Повна локалізація 5-ма мовами (🇺🇦 UA, 🇺🇸 EN, 🇪🇸 ES, 🇫🇷 FR, 🇩🇪 DE).
+
+---
+
+## 💎 Монетизація (Freemium Model)
+
+Додаток використовує гібридну модель для забезпечення найкращого користувацького досвіду:
+
+1.  **Free Tier:** Базовий облік, перегляд реклами (AdMob Banner & Interstitial) для доступу до AI-генерації рецептів.
+2.  **Premium (In-App Purchases):**
     * 🚫 Повна відсутність реклами.
-    * ♾️ Безлімітний пошук AI рецептів.
-    * 👨‍👩‍👧‍👦 Доступ до сімейного функціоналу.
-    * 🧠 Найрозумніша модель ШІ.
+    * ♾️ Безлімітне використання ШІ-сканера та генератора рецептів.
+    * 👨‍👩‍👧‍👦 Створення та управління "Сім'єю".
 
 ---
 
 ## 🛠 Технологічний стек
 
-* **Core:** Flutter (Dart).
-* **Backend:** Firebase (Firestore, Auth, Storage).
-* **Notifications:** * `firebase_messaging` (FCM V1 API).
-    * `flutter_local_notifications` (Локальні нагадування).
-    * `googleapis_auth` (Service Account автентифікація).
-* **AI:** OpenAI API (GPT-4o mini) + Image Search API.
-* **Monetization:** * `google_mobile_ads` (Banner & Interstitial).
-    * `in_app_purchase` (Subscriptions).
-* **Features:** * `flutter_sound` (Audio recording).
-    * `app_links` (Deep linking navigation).
-    * `geolocator` & `url_launcher` (Maps).
-    * `fl_chart` (Statistics).
-* **Localization:** 5 мов (🇺🇦 UA, 🇺🇸 EN, 🇪🇸 ES, 🇫🇷 FR, 🇩🇪 DE).
+**Mobile App:**
+* **Фреймворк:** Flutter (Dart)
+* **UI/UX:** Custom animations (`AnimatedSize`, `SlideTransition`), Material 3.
+* **Пакетна база:** `flutter_local_notifications`, `app_links`, `flutter_sound`, `fl_chart`, `in_app_purchase`, `google_mobile_ads`.
+
+**Backend & Cloud (Firebase):**
+* **База даних:** Cloud Firestore (Real-time sync).
+* **Сховище:** Firebase Storage (для голосових повідомлень та фото чату).
+* **Автентифікація:** Firebase Auth (Email Link, Google, GitHub).
+* **Бекенд-логіка:** Cloud Functions for Firebase (Node.js).
+* **Сповіщення:** Firebase Cloud Messaging (FCM HTTP v1 API).
+
+**Artificial Intelligence:**
+* **Text & Vision:** `@google/generative-ai` (Gemini 2.5 Flash & Gemini Vision) інтегрований через безпечні Cloud Functions.
 
 ---
 
 ## 👨‍💻 Розробник
 
-Цей проект розроблено та підтримується **Pavlito**.
+Цей проект розроблено та підтримується **Pavlo Lugovy (Pavlitoo)** — Frontend & Mobile Developer.
 
 * **GitHub:** [Pavlitoo](https://github.com/Pavlitoo)
 * **Email:** pasalugovij@gmail.com
+* **Landing Page:** [fridgify-website.vercel.app](https://fridgify-website.vercel.app)
 
 ---
 
 <div align="center">
-  <sub>Розроблено з ❤️ в Україні 🇺🇦</sub>
+  <sub>Розроблено з ❤️ в Україні 🇺🇦 | Clean Code & Modern Architecture</sub>
 </div>
