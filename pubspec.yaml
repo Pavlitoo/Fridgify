@@ -58,6 +58,7 @@ dependencies:
   path: ^1.9.1
   dio: ^5.9.2
   cloud_functions: ^4.7.6
+  barcode_scan2: ^4.7.2
 
 dev_dependencies:
   flutter_test:
