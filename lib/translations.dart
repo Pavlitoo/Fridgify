@@ -41,6 +41,13 @@ class AppText {
       'msg_trash_cleared': 'Смітник повністю очищено! 🧹',
       'tooltip_clear_all': 'Очистити все',
       'err_eat_too_much': 'Не можна з\'їсти більше, ніж є!',
+
+      // 🔥 СКАНЕР ШТРИХКОДІВ
+      'scan_barcode_tooltip': 'Сканувати штрихкод',
+      'barcode_searching': 'Шукаю продукт в базі...',
+      'barcode_not_found': 'Продукт не знайдено 😔. Введіть назву вручну.',
+      'barcode_error': 'Помилка сканування',
+      'barcode_success': 'Продукт знайдено! ✅',
     },
 
     // 🇺🇸 ENGLISH
@@ -74,6 +81,13 @@ class AppText {
       'msg_trash_cleared': 'Trash bin cleared! 🧹',
       'tooltip_clear_all': 'Clear all',
       'err_eat_too_much': 'Cannot eat more than you have!',
+
+      // 🔥 СКАНЕР ШТРИХКОДІВ
+      'scan_barcode_tooltip': 'Scan barcode',
+      'barcode_searching': 'Searching product database...',
+      'barcode_not_found': 'Product not found 😔. Please enter manually.',
+      'barcode_error': 'Scan error',
+      'barcode_success': 'Product found! ✅',
     },
 
     // 🇪🇸 ESPAÑOL
@@ -97,6 +111,13 @@ class AppText {
       'msg_trash_cleared': '¡Papelera vaciada! 🧹',
       'tooltip_clear_all': 'Borrar todo',
       'err_eat_too_much': '¡No puedes comer más de lo que tienes!',
+
+      // 🔥 СКАНЕР ШТРИХКОДІВ
+      'scan_barcode_tooltip': 'Escanear código de barras',
+      'barcode_searching': 'Buscando en la base de datos...',
+      'barcode_not_found': 'Producto no encontrado 😔. Ingrese manualmente.',
+      'barcode_error': 'Error de escaneo',
+      'barcode_success': '¡Producto encontrado! ✅',
     },
 
     // 🇫🇷 FRANÇAIS
@@ -120,6 +141,13 @@ class AppText {
       'msg_trash_cleared': 'Corbeille vidée ! 🧹',
       'tooltip_clear_all': 'Tout effacer',
       'err_eat_too_much': 'Impossible de manger plus que ce que vous avez !',
+
+      // 🔥 СКАНЕР ШТРИХКОДІВ
+      'scan_barcode_tooltip': 'Scanner le code-barres',
+      'barcode_searching': 'Recherche dans la base de données...',
+      'barcode_not_found': 'Produit introuvable 😔. Veuillez entrer manuellement.',
+      'barcode_error': 'Erreur de numérisation',
+      'barcode_success': 'Produit trouvé ! ✅',
     },
 
     // 🇩🇪 DEUTSCH
@@ -143,6 +171,13 @@ class AppText {
       'msg_trash_cleared': 'Papierkorb geleert! 🧹',
       'tooltip_clear_all': 'Alles löschen',
       'err_eat_too_much': 'Du kannst nicht mehr essen, als du hast!',
+
+      // 🔥 СКАНЕР ШТРИХКОДІВ
+      'scan_barcode_tooltip': 'Barcode scannen',
+      'barcode_searching': 'Produktdatenbank durchsuchen...',
+      'barcode_not_found': 'Produkt nicht gefunden 😔. Bitte manuell eingeben.',
+      'barcode_error': 'Scanfehler',
+      'barcode_success': 'Produkt gefunden! ✅',
     },
   };
 }

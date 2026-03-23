@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:barcode_scan2/barcode_scan2.dart';
+import '../barcode_service.dart';
+
 import '../product_model.dart';
 import '../translations.dart';
 import '../global.dart';
@@ -15,7 +18,7 @@ class FridgeDialogs {
     required BuildContext context,
     Product? productToEdit,
     required CollectionReference collection,
-    required List<dynamic> categories, // CategoryData List
+    required List<dynamic> categories,
     required Function(int) cancelNotification,
   }) {
     final nameController = TextEditingController(text: productToEdit?.name ?? '');
@@ -73,7 +76,54 @@ class FridgeDialogs {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextField(controller: nameController, style: TextStyle(fontSize: 18, color: textColor), decoration: InputDecoration(hintText: AppText.get('product_name'), hintStyle: const TextStyle(color: Colors.grey), prefixIcon: const Icon(Icons.edit, color: Colors.green), filled: true, fillColor: inputFill, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)), autofocus: true),
+                    // 🔥 ПОЛЕ НАЗВИ З КНОПКОЮ ШТРИХКОДУ
+                    TextField(
+                        controller: nameController,
+                        style: TextStyle(fontSize: 18, color: textColor),
+                        decoration: InputDecoration(
+                            hintText: AppText.get('product_name'),
+                            hintStyle: const TextStyle(color: Colors.grey),
+                            prefixIcon: const Icon(Icons.edit, color: Colors.green),
+                            // 👇 КНОПКА СКАНЕРА ШТРИХКОДІВ 👇
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.blue),
+                              tooltip: AppText.get('scan_barcode_tooltip'),
+                              onPressed: () async {
+                                try {
+                                  // Відкриваємо камеру
+                                  var result = await BarcodeScanner.scan();
+                                  if (result.type == ResultType.Barcode && result.rawContent.isNotEmpty) {
+                                    // Показуємо лоадер, поки шукаємо в інтернеті
+                                    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+
+                                    // Шукаємо продукт у базі
+                                    final productData = await BarcodeService.getProductByBarcode(result.rawContent);
+
+                                    if (!context.mounted) return;
+                                    Navigator.pop(context); // Закриваємо лоадер
+
+                                    if (productData != null) {
+                                      // Оновлюємо UI (назву і категорію)
+                                      setDialogState(() {
+                                        nameController.text = productData['name'];
+                                        selectedCategory = productData['category'];
+                                      });
+                                      SnackbarUtils.showSuccess(context, AppText.get('barcode_success'));
+                                    } else {
+                                      SnackbarUtils.showWarning(context, AppText.get('barcode_not_found'));
+                                    }
+                                  }
+                                } catch (e) {
+                                  SnackbarUtils.showError(context, "${AppText.get('barcode_error')}: $e");
+                                }
+                              },
+                            ),
+                            filled: true,
+                            fillColor: inputFill,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)
+                        ),
+                        autofocus: true
+                    ),
                     const SizedBox(height: 16),
                     Row(children: [
                       Expanded(child: TextField(controller: qtyController, keyboardType: const TextInputType.numberWithOptions(decimal: true), style: TextStyle(color: textColor), decoration: InputDecoration(hintText: AppText.get('quantity'), hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: inputFill, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)))),
@@ -111,7 +161,6 @@ class FridgeDialogs {
                               firstDate: DateTime.now(),
                               lastDate: DateTime.now().add(const Duration(days: 365 * 10)),
                               builder: (ctx, child) {
-                                // Форсуємо мову календаря
                                 Locale loc = const Locale('en', 'US');
                                 switch(languageNotifier.value) {
                                   case 'Українська': loc = const Locale('uk', 'UA'); break;
