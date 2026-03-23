@@ -11,6 +11,10 @@ class HouseholdService {
     final user = _auth.currentUser;
     if (user == null) throw Exception("User not logged in");
 
+    // 🔥 ДІЗНАЄМОСЯ, ЧИ МАЄ ТВОРЕЦЬ ПРЕМІУМ
+    final userDoc = await _firestore.collection('users').doc(user.uid).get();
+    bool isUserPremium = userDoc.data()?['isPremium'] ?? false;
+
     final batch = _firestore.batch();
     final householdRef = _firestore.collection('households').doc();
     String inviteCode = _generateInviteCode();
@@ -21,6 +25,7 @@ class HouseholdService {
       'inviteCode': inviteCode,
       'createdAt': FieldValue.serverTimestamp(),
       'members': [user.uid],
+      'isPremium': isUserPremium, // 🔥 ОДРАЗУ ПЕРЕДАЄМО ПРЕМІУМ-СТАТУС СІМ'Ї
     });
 
     final userRef = _firestore.collection('users').doc(user.uid);
@@ -39,7 +44,6 @@ class HouseholdService {
     final user = _auth.currentUser;
     if (user == null) return;
 
-    // 1. Шукаємо сім'ю
     final snapshot = await _firestore.collection('households').where('inviteCode', isEqualTo: code).limit(1).get();
 
     if (snapshot.docs.isEmpty) {
@@ -50,14 +54,11 @@ class HouseholdService {
     final householdId = householdDoc.id;
     List members = List.from(householdDoc.data()['members'] ?? []);
 
-    // 2. Якщо вже там
     if (members.contains(user.uid)) {
-      // Якщо юзер в списку, але у нього немає householdId, фіксимо це:
       await _firestore.collection('users').doc(user.uid).update({'householdId': householdId});
       throw Exception("Ви вже в цій сім'ї.");
     }
 
-    // 3. Створюємо запит
     await householdDoc.reference.collection('requests').doc(user.uid).set({
       'uid': user.uid,
       'name': user.displayName ?? 'User',
@@ -116,12 +117,10 @@ class HouseholdService {
   Future<void> removeMember(String householdId, String memberId) async {
     final batch = _firestore.batch();
 
-    // Видаляємо зі списку сім'ї
     batch.update(_firestore.collection('households').doc(householdId), {
       'members': FieldValue.arrayRemove([memberId])
     });
 
-    // Видаляємо ID сім'ї у користувача
     batch.update(_firestore.collection('users').doc(memberId), {
       'householdId': FieldValue.delete()
     });

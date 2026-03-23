@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+// 🔥 ВИДАЛЕНО: import 'dart:io'; (щоб прибрати попередження unused import)
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -42,11 +42,11 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     super.initState();
     _checkIfSaved();
 
-    // 🔥 БЕРЕМО ДАНІ ПРЯМО ВІД ШІ (БЕЗ ЗАЙВИХ ПЕРЕВІРОК)
     _dynamicAvailableIngredients = widget.recipe.ingredients;
     _dynamicMissingIngredients = widget.recipe.missingIngredients;
 
-    if (!SubscriptionService().isPremium) _loadBannerAd();
+    // 🔥 ВИПРАВЛЕНО: Використовуємо hasProOrHigher
+    if (!SubscriptionService().hasProOrHigher) _loadBannerAd();
   }
 
   void _loadBannerAd() {
@@ -70,24 +70,20 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   String _translateRawIngredient(String raw) {
     final parsed = _parseIngredient(raw);
 
-    // Перекладаємо назву продукту, якщо вона є у словнику
     String translatedName = AppText.get(parsed['name'].toString().toLowerCase());
     if (translatedName == parsed['name'].toString().toLowerCase()) {
-      translatedName = parsed['name']; // Залишаємо оригінал, якщо немає перекладу
+      translatedName = parsed['name'];
     }
 
-    // Перекладаємо одиницю виміру (наприклад, 'pcs' -> 'шт', 'g' -> 'г')
     String translatedUnit = AppText.get('u_${parsed['unit']}');
     if (translatedUnit == 'u_${parsed['unit']}') {
       translatedUnit = parsed['unit'];
     }
 
-    // Якщо ШІ не дав числа, просто повертаємо текст
     if (parsed['hasNumber'] != true) {
       return translatedName;
     }
 
-    // Форматуємо кількість: якщо це 1.0 -> робимо 1, якщо 1.5 -> залишаємо 1.5
     double qty = parsed['quantity'];
     String qtyStr = (qty == qty.toInt()) ? qty.toInt().toString() : qty.toString();
 
@@ -100,7 +96,6 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     String unit = 'pcs';
     bool hasNumber = false;
 
-    // Регулярка шукає число на початку, потім пробіл, потім одиницю виміру
     final regex = RegExp(r'^([\d.,]+)\s*(г|гр|g|кг|kg|мл|ml|л|l|шт|pcs|ст\.л|ч\.л)?\s*(.*)$');
     final match = regex.firstMatch(name);
 
@@ -108,12 +103,10 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       quantity = double.tryParse(match.group(1)!.replaceAll(',', '.')) ?? 1.0;
       unit = _normalizeUnit(match.group(2) ?? 'pcs');
       name = match.group(3) ?? name;
-      hasNumber = true; // Ми знайшли реальне число
+      hasNumber = true;
     }
 
-    // Прибираємо зайві тире чи крапки на початку, якщо ШІ їх додав
     name = name.replaceAll(RegExp(r'^[-*•xх]\s*'), '').trim();
-    // Робимо першу літеру великою для краси
     if (name.isNotEmpty) {
       name = name[0].toUpperCase() + name.substring(1);
     }
@@ -434,7 +427,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
               ],
             ),
           ),
-          if (_bannerAd != null && _isBannerLoaded && !SubscriptionService().isPremium) Container(alignment: Alignment.center, width: _bannerAd!.size.width.toDouble(), height: _bannerAd!.size.height.toDouble(), child: AdWidget(ad: _bannerAd!)),
+          // 🔥 ВИПРАВЛЕНО: Використовуємо hasProOrHigher
+          if (_bannerAd != null && _isBannerLoaded && !SubscriptionService().hasProOrHigher) Container(alignment: Alignment.center, width: _bannerAd!.size.width.toDouble(), height: _bannerAd!.size.height.toDouble(), child: AdWidget(ad: _bannerAd!)),
         ],
       ),
     );

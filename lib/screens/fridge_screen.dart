@@ -110,7 +110,8 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
 
   void _initAds() {
     AdService().init();
-    if (!SubscriptionService().isPremium) _loadBannerAd();
+    // 🔥 ВИПРАВЛЕНО: Перевіряємо чи є хоча б PRO рівень
+    if (!SubscriptionService().hasProOrHigher) _loadBannerAd();
   }
 
   void _loadBannerAd() {
@@ -511,7 +512,8 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
                       },
                     ),
                   ),
-                  if (_bannerAd != null && _isBannerLoaded && !SubscriptionService().isPremium) Container(alignment: Alignment.center, width: _bannerAd!.size.width.toDouble(), height: _bannerAd!.size.height.toDouble(), child: AdWidget(ad: _bannerAd!)),
+                  // 🔥 ВИПРАВЛЕНО: Перевіряємо чи є хоча б PRO рівень
+                  if (_bannerAd != null && _isBannerLoaded && !SubscriptionService().hasProOrHigher) Container(alignment: Alignment.center, width: _bannerAd!.size.width.toDouble(), height: _bannerAd!.size.height.toDouble(), child: AdWidget(ad: _bannerAd!)),
                 ],
               ),
               floatingActionButton: _selectedProductIds.isNotEmpty

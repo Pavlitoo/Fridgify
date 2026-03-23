@@ -22,7 +22,8 @@ class _SavedRecipesScreenState extends State<SavedRecipesScreen> {
   @override
   void initState() {
     super.initState();
-    if (!SubscriptionService().isPremium) {
+    // 🔥 ВИПРАВЛЕНО: Використовуємо hasProOrHigher
+    if (!SubscriptionService().hasProOrHigher) {
       _loadBannerAd();
     }
   }
@@ -128,7 +129,8 @@ class _SavedRecipesScreenState extends State<SavedRecipesScreen> {
               },
             ),
           ),
-          if (_bannerAd != null && _isBannerLoaded && !SubscriptionService().isPremium)
+          // 🔥 ВИПРАВЛЕНО: Використовуємо hasProOrHigher
+          if (_bannerAd != null && _isBannerLoaded && !SubscriptionService().hasProOrHigher)
             Container(alignment: Alignment.center, width: _bannerAd!.size.width.toDouble(), height: _bannerAd!.size.height.toDouble(), child: AdWidget(ad: _bannerAd!)),
         ],
       ),

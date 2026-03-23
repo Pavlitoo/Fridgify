@@ -10,32 +10,29 @@ class PremiumScreen extends StatefulWidget {
 }
 
 class _PremiumScreenState extends State<PremiumScreen> {
-  bool _isLoading = false;
+  String? _loadingPlanId;
 
   @override
   void initState() {
     super.initState();
-    // Ініціалізуємо сервіс, щоб він підтягнув актуальну ціну з Google
     SubscriptionService().init();
   }
 
-  Future<void> _buy() async {
-    setState(() => _isLoading = true);
+  Future<void> _buy(String planId) async {
+    setState(() => _loadingPlanId = planId);
 
-    // Перевірка, чи завантажились продукти
     if (SubscriptionService().products.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppText.get('err_store')), backgroundColor: Colors.orange),
         );
       }
-      setState(() => _isLoading = false);
+      setState(() => _loadingPlanId = null);
       return;
     }
 
     try {
-      // Запуск процесу покупки
-      bool launched = await SubscriptionService().buyPremium();
+      bool launched = await SubscriptionService().buySubscription(planId);
       if (!launched && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppText.get('msg_buy_error')), backgroundColor: Colors.red),
@@ -44,7 +41,17 @@ class _PremiumScreenState extends State<PremiumScreen> {
     } catch (e) {
       debugPrint("Buy error: $e");
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _loadingPlanId = null);
+    }
+  }
+
+  String _getPrice(String id, String fallback) {
+    try {
+      final products = SubscriptionService().products;
+      if (products.isEmpty) return fallback;
+      return products.firstWhere((p) => p.id == id).price;
+    } catch (e) {
+      return fallback;
     }
   }
 
@@ -53,15 +60,10 @@ class _PremiumScreenState extends State<PremiumScreen> {
     return AnimatedBuilder(
       animation: SubscriptionService(),
       builder: (context, child) {
-        final isPremium = SubscriptionService().isPremium;
-        final products = SubscriptionService().products;
+        final currentTier = SubscriptionService().currentTier;
 
-        // 🔥 Тут логіка:
-        // 1. Якщо Google віддав ціну -> показуємо її (вона буде 59.99 грн після оновлення кешу).
-        // 2. Якщо ще вантажиться -> показуємо заглушку "59.99 ₴".
-        final String priceText = products.isNotEmpty
-            ? products.first.price
-            : "59.99 ₴";
+        final String proPrice = _getPrice('premium_pro_monthly', "2.99 \$");
+        final String familyPrice = _getPrice('family_max_monthly', "4.99 \$");
 
         return Scaffold(
           body: Container(
@@ -82,118 +84,91 @@ class _PremiumScreenState extends State<PremiumScreen> {
                       padding: const EdgeInsets.all(16.0),
                       child: IconButton(
                         icon: const Icon(Icons.close, color: Colors.white70, size: 30),
-                        onPressed: () => Navigator.pop(context, isPremium),
+                        onPressed: () => Navigator.pop(context, currentTier != SubTier.free),
                       ),
                     ),
                   ),
 
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Spacer(flex: 2),
-
-                      // Велика іконка
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: isPremium ? Colors.green.withOpacity(0.2) : Colors.amber.withOpacity(0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                            isPremium ? Icons.check_circle : Icons.workspace_premium,
-                            size: 80,
-                            color: isPremium ? Colors.green : Colors.amber
-                        ),
-                      ),
-                      const SizedBox(height: 30),
-
-                      // Заголовок
-                      Text(
-                        isPremium ? AppText.get('prem_active') : AppText.get('prem_title'),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1),
-                      ),
-                      const SizedBox(height: 15),
-
-                      // Опис під заголовком
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 40),
-                        child: Text(
-                          isPremium ? AppText.get('prem_sub_active') : AppText.get('prem_desc'),
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 20),
+                        const Icon(Icons.workspace_premium_rounded, size: 80, color: Colors.amber),
+                        const SizedBox(height: 20),
+                        Text(
+                          currentTier == SubTier.free ? AppText.get('prem_choose_plan') : AppText.get('prem_your_sub'),
                           textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 16, color: Colors.white70, height: 1.5),
+                          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
-                      ),
+                        const SizedBox(height: 10),
+                        Text(
+                          AppText.get('prem_subtitle'),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 16, color: Colors.white70),
+                        ),
+                        const SizedBox(height: 40),
 
-                      const Spacer(flex: 1),
+                        // --- КАРТКА PREMIUM PRO ---
+                        _buildPlanCard(
+                          title: "Premium PRO",
+                          priceText: "$proPrice ${AppText.get('prem_per_month')}",
+                          color: Colors.blueAccent,
+                          icon: Icons.person_rounded,
+                          features: [
+                            AppText.get('ben_1'),
+                            AppText.get('ben_2'),
+                            AppText.get('prem_pro_ben_3'),
+                          ],
+                          buttonText: _getProButtonText(currentTier),
+                          isButtonDisabled: currentTier == SubTier.pro || currentTier == SubTier.family,
+                          isLoading: _loadingPlanId == 'premium_pro_monthly',
+                          onTap: () => _buy('premium_pro_monthly'),
+                        ),
 
-                      // Список переваг (тільки якщо не куплено)
-                      if (!isPremium) ...[
-                        _benefitRow(Icons.block, AppText.get('ben_1')),
-                        _benefitRow(Icons.all_inclusive, AppText.get('ben_2')),
-                        _benefitRow(Icons.family_restroom, AppText.get('ben_3')),
-                        _benefitRow(Icons.auto_awesome, AppText.get('ben_4')),
-                      ],
+                        const SizedBox(height: 25),
 
-                      const Spacer(flex: 3),
+                        // --- КАРТКА FAMILY MAX ---
+                        _buildPlanCard(
+                          title: "Family MAX",
+                          priceText: "$familyPrice ${AppText.get('prem_per_month')}",
+                          color: Colors.amber,
+                          icon: Icons.family_restroom_rounded,
+                          isBestValue: true,
+                          features: [
+                            AppText.get('prem_fam_ben_1'),
+                            AppText.get('prem_fam_ben_2'),
+                            AppText.get('prem_fam_ben_3'),
+                            AppText.get('prem_fam_ben_4'),
+                          ],
+                          buttonText: _getFamilyButtonText(currentTier),
+                          isButtonDisabled: currentTier == SubTier.family,
+                          isLoading: _loadingPlanId == 'family_max_monthly',
+                          onTap: () => _buy('family_max_monthly'),
+                        ),
 
-                      // Кнопка Купити / Керувати
-                      if (isPremium) ...[
-                        Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 24),
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.green.withOpacity(0.3))
-                          ),
-                          child: Column(
-                            children: [
-                              Text(AppText.get('prem_congrats'), style: const TextStyle(color: Colors.greenAccent, fontSize: 18, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 15),
-                              ElevatedButton(
-                                onPressed: () => SubscriptionService().openManagementPage(),
-                                style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.white12,
-                                    foregroundColor: Colors.white,
-                                    minimumSize: const Size(double.infinity, 50),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    elevation: 0
-                                ),
-                                child: Text(AppText.get('prem_btn_manage')),
-                              ),
-                            ],
-                          ),
-                        )
-                      ] else ...[
-                        _isLoading
-                            ? const CircularProgressIndicator(color: Colors.amber)
-                            : Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                          child: ElevatedButton(
-                            onPressed: _buy,
+                        const SizedBox(height: 40),
+
+                        // Кнопки відновлення та керування
+                        if (currentTier != SubTier.free)
+                          ElevatedButton.icon(
+                            onPressed: () => SubscriptionService().openManagementPage(),
+                            icon: const Icon(Icons.settings, color: Colors.white),
+                            label: Text(AppText.get('prem_btn_manage'), style: const TextStyle(color: Colors.white)),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.amber,
-                              foregroundColor: Colors.black,
-                              minimumSize: const Size(double.infinity, 60),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              elevation: 8,
-                              shadowColor: Colors.amber.withOpacity(0.4),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(AppText.get('prem_btn_buy'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                                // Ціна + " / міс."
-                                Text("$priceText / ${AppText.get('u_months')}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.normal)),
-                              ],
+                              backgroundColor: Colors.white12,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
                           ),
+
+                        TextButton(
+                          onPressed: () => SubscriptionService().restorePurchases(),
+                          child: Text(AppText.get('prem_btn_restore'), style: const TextStyle(color: Colors.white54, decoration: TextDecoration.underline)),
                         ),
                         const SizedBox(height: 20),
                       ],
-                      const SizedBox(height: 30),
-                    ],
+                    ),
                   ),
                 ],
               ),
@@ -204,14 +179,117 @@ class _PremiumScreenState extends State<PremiumScreen> {
     );
   }
 
-  Widget _benefitRow(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 8),
-      child: Row(
+  String _getProButtonText(SubTier tier) {
+    if (tier == SubTier.family) return AppText.get('prem_btn_included');
+    if (tier == SubTier.pro) return AppText.get('prem_active');
+    return AppText.get('prem_btn_choose_pro');
+  }
+
+  String _getFamilyButtonText(SubTier tier) {
+    if (tier == SubTier.family) return AppText.get('prem_active');
+    if (tier == SubTier.pro) return AppText.get('prem_btn_upgrade_fam');
+    return AppText.get('prem_btn_choose_fam');
+  }
+
+  Widget _buildPlanCard({
+    required String title,
+    required String priceText,
+    required Color color,
+    required IconData icon,
+    required List<String> features,
+    required String buttonText,
+    required bool isButtonDisabled,
+    required bool isLoading,
+    required VoidCallback onTap,
+    bool isBestValue = false,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: color.withOpacity(isButtonDisabled ? 0.3 : 0.8), width: 2),
+        boxShadow: isButtonDisabled ? [] : [
+          BoxShadow(color: color.withOpacity(0.15), blurRadius: 20, spreadRadius: 2)
+        ],
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          Icon(icon, color: Colors.amber, size: 24),
-          const SizedBox(width: 15),
-          Expanded(child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500))),
+          if (isBestValue)
+            Positioned(
+              top: -12,
+              right: 20,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [BoxShadow(color: color.withOpacity(0.5), blurRadius: 8)],
+                ),
+                child: Text(AppText.get('prem_badge_best'), style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold)),
+              ),
+            ),
+
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: color.withOpacity(0.2), shape: BoxShape.circle),
+                      child: Icon(icon, color: color, size: 28),
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                          Text(priceText, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Divider(color: Colors.white24, height: 1),
+                ),
+                ...features.map((f) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.check_circle_outline, color: color, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(f, style: const TextStyle(color: Colors.white70, fontSize: 15, height: 1.3))),
+                    ],
+                  ),
+                )),
+                const SizedBox(height: 25),
+                SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: ElevatedButton(
+                    onPressed: isButtonDisabled || isLoading ? null : onTap,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: color,
+                      foregroundColor: isBestValue ? Colors.black : Colors.white,
+                      disabledBackgroundColor: Colors.white12,
+                      disabledForegroundColor: Colors.white54,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: isLoading
+                        ? SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: isBestValue ? Colors.black : Colors.white, strokeWidth: 2))
+                        : Text(buttonText, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

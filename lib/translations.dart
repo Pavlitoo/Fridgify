@@ -48,6 +48,22 @@ class AppText {
       'barcode_not_found': 'Продукт не знайдено 😔. Введіть назву вручну.',
       'barcode_error': 'Помилка сканування',
       'barcode_success': 'Продукт знайдено! ✅',
+
+      // 🔥 НОВИЙ ЕКРАН ПІДПИСКИ (PAYWALL)
+      'prem_choose_plan': 'Оберіть свій план',
+      'prem_your_sub': 'Ваша Підписка',
+      'prem_subtitle': 'Готуйте розумніше, зберігайте більше, діліться з родиною.',
+      'prem_per_month': '/ міс.',
+      'prem_pro_ben_3': 'Для одного користувача',
+      'prem_btn_included': 'Включено у Family',
+      'prem_btn_choose_pro': 'Обрати PRO',
+      'prem_fam_ben_1': 'Усі можливості Premium PRO',
+      'prem_fam_ben_2': 'Доступ для 5 членів сім\'ї',
+      'prem_fam_ben_3': 'Спільний чат та списки покупок',
+      'prem_fam_ben_4': 'Синхронізація холодильника',
+      'prem_btn_upgrade_fam': 'Оновити до Family',
+      'prem_btn_choose_fam': 'Обрати FAMILY',
+      'prem_badge_best': 'НАЙКРАЩИЙ ВИБІР',
     },
 
     // 🇺🇸 ENGLISH
@@ -88,6 +104,22 @@ class AppText {
       'barcode_not_found': 'Product not found 😔. Please enter manually.',
       'barcode_error': 'Scan error',
       'barcode_success': 'Product found! ✅',
+
+      // 🔥 НОВИЙ ЕКРАН ПІДПИСКИ (PAYWALL)
+      'prem_choose_plan': 'Choose your plan',
+      'prem_your_sub': 'Your Subscription',
+      'prem_subtitle': 'Cook smarter, save more, share with family.',
+      'prem_per_month': '/ mo.',
+      'prem_pro_ben_3': 'For one user',
+      'prem_btn_included': 'Included in Family',
+      'prem_btn_choose_pro': 'Choose PRO',
+      'prem_fam_ben_1': 'All Premium PRO features',
+      'prem_fam_ben_2': 'Access for 5 family members',
+      'prem_fam_ben_3': 'Shared chat & shopping lists',
+      'prem_fam_ben_4': 'Fridge synchronization',
+      'prem_btn_upgrade_fam': 'Upgrade to Family',
+      'prem_btn_choose_fam': 'Choose FAMILY',
+      'prem_badge_best': 'BEST VALUE',
     },
 
     // 🇪🇸 ESPAÑOL
@@ -118,6 +150,22 @@ class AppText {
       'barcode_not_found': 'Producto no encontrado 😔. Ingrese manualmente.',
       'barcode_error': 'Error de escaneo',
       'barcode_success': '¡Producto encontrado! ✅',
+
+      // 🔥 НОВИЙ ЕКРАН ПІДПИСКИ (PAYWALL)
+      'prem_choose_plan': 'Elige tu plan',
+      'prem_your_sub': 'Tu Suscripción',
+      'prem_subtitle': 'Cocina más inteligente, ahorra más, comparte en familia.',
+      'prem_per_month': '/ mes',
+      'prem_pro_ben_3': 'Para un usuario',
+      'prem_btn_included': 'Incluido en Family',
+      'prem_btn_choose_pro': 'Elegir PRO',
+      'prem_fam_ben_1': 'Todas las funciones de Premium PRO',
+      'prem_fam_ben_2': 'Acceso para 5 miembros de la familia',
+      'prem_fam_ben_3': 'Chat y listas de compras compartidas',
+      'prem_fam_ben_4': 'Sincronización de nevera',
+      'prem_btn_upgrade_fam': 'Mejorar a Family',
+      'prem_btn_choose_fam': 'Elegir FAMILY',
+      'prem_badge_best': 'MEJOR VALOR',
     },
 
     // 🇫🇷 FRANÇAIS
@@ -148,6 +196,22 @@ class AppText {
       'barcode_not_found': 'Produit introuvable 😔. Veuillez entrer manuellement.',
       'barcode_error': 'Erreur de numérisation',
       'barcode_success': 'Produit trouvé ! ✅',
+
+      // 🔥 НОВИЙ ЕКРАН ПІДПИСКИ (PAYWALL)
+      'prem_choose_plan': 'Choisissez votre plan',
+      'prem_your_sub': 'Votre Abonnement',
+      'prem_subtitle': 'Cuisinez plus intelligemment, économisez plus, partagez.',
+      'prem_per_month': '/ mois',
+      'prem_pro_ben_3': 'Pour un utilisateur',
+      'prem_btn_included': 'Inclus dans Family',
+      'prem_btn_choose_pro': 'Choisir PRO',
+      'prem_fam_ben_1': 'Toutes les fonctions Premium PRO',
+      'prem_fam_ben_2': 'Accès pour 5 membres de la famille',
+      'prem_fam_ben_3': 'Chat et listes de courses partagés',
+      'prem_fam_ben_4': 'Synchronisation du frigo',
+      'prem_btn_upgrade_fam': 'Passer à Family',
+      'prem_btn_choose_fam': 'Choisir FAMILY',
+      'prem_badge_best': 'MEILLEUR CHOIX',
     },
 
     // 🇩🇪 DEUTSCH
@@ -178,6 +242,22 @@ class AppText {
       'barcode_not_found': 'Produkt nicht gefunden 😔. Bitte manuell eingeben.',
       'barcode_error': 'Scanfehler',
       'barcode_success': 'Produkt gefunden! ✅',
+
+      // 🔥 НОВИЙ ЕКРАН ПІДПИСКИ (PAYWALL)
+      'prem_choose_plan': 'Wählen Sie Ihren Plan',
+      'prem_your_sub': 'Ihr Abonnement',
+      'prem_subtitle': 'Clever kochen, mehr sparen, mit der Familie teilen.',
+      'prem_per_month': '/ Monat',
+      'prem_pro_ben_3': 'Für einen Benutzer',
+      'prem_btn_included': 'In Family enthalten',
+      'prem_btn_choose_pro': 'PRO wählen',
+      'prem_fam_ben_1': 'Alle Premium PRO Funktionen',
+      'prem_fam_ben_2': 'Zugang für 5 Familienmitglieder',
+      'prem_fam_ben_3': 'Gemeinsamer Chat & Einkaufslisten',
+      'prem_fam_ben_4': 'Kühlschrank-Synchronisation',
+      'prem_btn_upgrade_fam': 'Auf Family upgraden',
+      'prem_btn_choose_fam': 'FAMILY wählen',
+      'prem_badge_best': 'BESTER WERT',
     },
   };
 }

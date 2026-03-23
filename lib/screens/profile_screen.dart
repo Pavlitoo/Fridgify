@@ -30,7 +30,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final user = FirebaseAuth.instance.currentUser!;
-  bool _isPremium = false;
+  SubTier _currentTier = SubTier.free;
   bool _isLoadingData = true;
   String? _avatarBase64;
   String _displayName = "User";
@@ -43,7 +43,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    // Якщо ім'я пусте, беремо дефолтне, але краще потім перекласти
     _displayName = user.displayName ?? "User";
     _nameController.text = _displayName;
 
@@ -55,8 +54,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _checkPremiumStatus() async {
-    bool status = SubscriptionService().isPremium;
-    if(mounted) setState(() => _isPremium = status);
+    SubTier status = SubscriptionService().currentTier;
+    if(mounted) setState(() => _currentTier = status);
   }
 
   Future<void> _handlePremiumButton() async {
@@ -106,7 +105,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() => _avatarBase64 = base64String);
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({'avatar_base64': base64String}, SetOptions(merge: true));
 
-      // Тут можна додати ключ 'msg_photo_updated' в translations.dart, поки що лишаємо універсальний
       SnackbarUtils.showSuccess(context, "OK! 📸");
     } catch (e) {
       SnackbarUtils.showError(context, AppText.get('err_general'));
@@ -123,10 +121,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       await user.updateDisplayName(newName);
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({'displayName': newName}, SetOptions(merge: true));
-
-      // 🔥 ВИПРАВЛЕНО: Тепер береться переклад з файлу
       SnackbarUtils.showSuccess(context, AppText.get('msg_name_changed'));
-
     } catch (e) {
       SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
     }
@@ -147,7 +142,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        if(mounted) SnackbarUtils.showWarning(context, 'GPS OFF'); // Можна додати ключ пізніше
+        if(mounted) SnackbarUtils.showWarning(context, 'GPS OFF');
         return;
       }
 
@@ -155,7 +150,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) return;
 
-      // 🔥 ВИПРАВЛЕНО: Використовуємо переклад
       if(mounted) SnackbarUtils.showSuccess(context, AppText.get('searching_loc'));
 
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
@@ -179,14 +173,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         leading: Text(flag, style: const TextStyle(fontSize: 24)),
         title: Text(lang),
         onTap: () async {
-          // 1. Змінюємо мову локально в додатку
           languageNotifier.value = lang;
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('language', lang);
           _updateSettings('language', lang);
 
-          // 🔥 2. ДОДАНО: Зберігаємо код мови в Firestore для серверних пушів
-          String langCode = 'en'; // Дефолтна мова
+          String langCode = 'en';
           if (lang == 'Українська') langCode = 'uk';
           else if (lang == 'Español') langCode = 'es';
           else if (lang == 'Français') langCode = 'fr';
@@ -196,7 +188,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
               'language': langCode,
             }, SetOptions(merge: true));
-            debugPrint("🌍 Мову ($langCode) збережено в Firestore");
           } catch (e) {
             debugPrint("❌ Помилка збереження мови: $e");
           }
@@ -219,6 +210,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final dividerColor = Theme.of(context).dividerColor;
           const tilePadding = EdgeInsets.symmetric(horizontal: 24, vertical: 16);
 
+          final bool hasAnyPremium = _currentTier != SubTier.free;
+
           return Scaffold(
             backgroundColor: Theme.of(context).scaffoldBackgroundColor,
             appBar: AppBar(title: Text(AppText.get('my_profile'), style: const TextStyle(fontWeight: FontWeight.bold)), backgroundColor: Theme.of(context).appBarTheme.backgroundColor, centerTitle: true, actions: [IconButton(icon: const Icon(Icons.logout), onPressed: () => FirebaseAuth.instance.signOut())]),
@@ -240,13 +233,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: _handlePremiumButton,
-                    icon: Icon(_isPremium ? Icons.check_circle : Icons.star, color: Colors.white),
+                    icon: Icon(hasAnyPremium ? Icons.check_circle : Icons.star, color: Colors.white),
                     label: Text(
-                        _isPremium ? AppText.get('prem_active') : AppText.get('prem_btn_buy'),
+                        hasAnyPremium ? AppText.get('prem_active') : AppText.get('prem_btn_buy'),
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)
                     ),
                     style: ElevatedButton.styleFrom(
-                        backgroundColor: _isPremium ? Colors.green : Colors.amber,
+                        backgroundColor: hasAnyPremium ? Colors.green : Colors.amber,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                         elevation: 6
@@ -254,7 +247,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
 
-                // 🔥 ВИПРАВЛЕНО: Кнопка локації тепер бере текст з перекладу
                 Container(margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), width: double.infinity, child: ElevatedButton.icon(onPressed: _openMyLocation, icon: const Icon(Icons.location_on, color: Colors.white), label: Text(AppText.get('map_btn'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), elevation: 4))),
 
                 Container(margin: const EdgeInsets.fromLTRB(16, 20, 16, 40), padding: const EdgeInsets.symmetric(vertical: 8), decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(24), border: Border.all(color: dividerColor.withOpacity(0.05)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 5))]), child: Column(children: [
@@ -274,23 +266,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ListTile(contentPadding: tilePadding, leading: _buildIcon(Icons.help_outline, Colors.teal), title: Text(AppText.get('faq_title'), style: _tileStyle(textColor)), trailing: _arrow(), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const FaqScreen()))),
                   const Divider(height: 1),
 
+                  // 🔥 ВИПРАВЛЕНО: Тепер пускаємо ВСІХ на екран сім'ї!
                   ListTile(
                       contentPadding: tilePadding,
                       leading: _buildIcon(Icons.people, Colors.pink),
-                      // 🔥 ВИПРАВЛЕНО: Текст налаштувань сім'ї
-                      title: Row(children: [Text(AppText.get('family_settings'), style: _tileStyle(textColor)), if (!_isPremium) const Padding(padding: EdgeInsets.only(left: 8), child: Icon(Icons.lock, size: 16, color: Colors.grey))]),
-                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [if (_householdId != null && _isPremium) StreamBuilder<int>(stream: _unreadStream, builder: (context, snap) { if (!snap.hasData || snap.data == 0) return const SizedBox(); return Container(margin: const EdgeInsets.only(right: 10), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(12)), child: Text(snap.data! > 99 ? "99+" : "${snap.data!}", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))); }), _arrow()]),
-                      onTap: () { if (!_isPremium) { _handlePremiumButton(); } else { Navigator.push(context, MaterialPageRoute(builder: (context) => const FamilyScreen())); } }
+                      title: Text(AppText.get('family_settings'), style: _tileStyle(textColor)),
+                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [if (_householdId != null && _currentTier == SubTier.family) StreamBuilder<int>(stream: _unreadStream, builder: (context, snap) { if (!snap.hasData || snap.data == 0) return const SizedBox(); return Container(margin: const EdgeInsets.only(right: 10), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(12)), child: Text(snap.data! > 99 ? "99+" : "${snap.data!}", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))); }), _arrow()]),
+                      onTap: () { Navigator.push(context, MaterialPageRoute(builder: (context) => const FamilyScreen())); }
                   ),
 
                   const Divider(height: 1),
 
-                  // 🔥 ВИПРАВЛЕНО: Текст теми
                   SwitchListTile(contentPadding: tilePadding, secondary: _buildIcon(Icons.dark_mode, Colors.deepPurple, bgColor: Colors.grey.shade200), title: Text(AppText.get('theme_dark'), style: _tileStyle(textColor)), value: isRealDarkMode, onChanged: _toggleDarkMode, activeColor: Colors.deepPurple),
 
                   const Divider(height: 1),
 
-                  // 🔥 ВИПРАВЛЕНО: Текст мови
                   ListTile(contentPadding: tilePadding, leading: _buildIcon(Icons.language, Colors.blue), title: Text(AppText.get('select_lang'), style: _tileStyle(textColor)), trailing: _arrow(), onTap: () => _showLanguageDialog()),
                 ])),
               ]),

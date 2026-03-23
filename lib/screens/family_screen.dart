@@ -9,6 +9,9 @@ import '../global.dart';
 import '../utils/snackbar_utils.dart';
 import '../error_handler.dart';
 
+// 🔥 ДОДАНО ІМПОРТИ
+import '../subscription_service.dart';
+import '../premium_screen.dart';
 import '/chat_screen.dart';
 import '/smart_avatar.dart';
 
@@ -82,6 +85,17 @@ class _FamilyScreenState extends State<FamilyScreen> {
       }
     } catch (e) {
       debugPrint("Error checking admin: $e");
+    }
+  }
+
+  // 🔥 НОВА РОЗУМНА ФУНКЦІЯ СТВОРЕННЯ СІМ'Ї
+  void _handleCreateFamilyPress() {
+    if (SubscriptionService().hasFamily) {
+      // Якщо є Family Max - створюємо!
+      _createFamily();
+    } else {
+      // Якщо немає - перекидаємо на Paywall
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen()));
     }
   }
 
@@ -271,8 +285,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
   void _openDm(String memberId, String memberName) {
     if (memberId == user.uid) return;
     String dmChatId = _chatService.getDmChatId(user.uid, memberId);
-
-    // 🔥 ФІКС: Змінено на звичайний push
     Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: dmChatId, isDirect: true, chatTitle: memberName)));
   }
 
@@ -287,6 +299,9 @@ class _FamilyScreenState extends State<FamilyScreen> {
         final textColor = Theme.of(context).textTheme.bodyLarge?.color;
         final cardColor = Theme.of(context).cardColor;
         final codeBgColor = isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF1F8E9);
+
+        // 🔥 ПЕРЕВІРКА ПРЕМІУМУ ДЛЯ ДИЗАЙНУ КНОПКИ
+        final hasFamilyTier = SubscriptionService().hasFamily;
 
         if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
@@ -305,8 +320,24 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   const SizedBox(height: 10),
                   Text(AppText.get('fam_welcome_desc'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, color: Colors.grey)),
                   const SizedBox(height: 50),
-                  SizedBox(width: double.infinity, height: 55, child: ElevatedButton.icon(onPressed: _createFamily, icon: const Icon(Icons.add, color: Colors.white), label: Text(AppText.get('fam_create'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))))),
+
+                  // 🔥 ЗОЛОТА КНОПКА З КОРОНОЮ ЯКЩО НЕМАЄ FAMILY MAX
+                  SizedBox(
+                      width: double.infinity, height: 55,
+                      child: ElevatedButton.icon(
+                          onPressed: _handleCreateFamilyPress,
+                          icon: Icon(hasFamilyTier ? Icons.add : Icons.workspace_premium, color: hasFamilyTier ? Colors.white : Colors.black),
+                          label: Text(AppText.get('fam_create'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: hasFamilyTier ? Colors.white : Colors.black)),
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: hasFamilyTier ? Colors.green : Colors.amber,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))
+                          )
+                      )
+                  ),
+
                   const SizedBox(height: 20),
+
+                  // Кнопка приєднання (Завжди безкоштовна)
                   SizedBox(width: double.infinity, height: 55, child: OutlinedButton.icon(onPressed: _joinFamily, icon: const Icon(Icons.link, color: Colors.green), label: Text(AppText.get('fam_join'), style: const TextStyle(fontSize: 18, color: Colors.green)), style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.green, width: 2), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))))),
                 ],
               ),
@@ -391,7 +422,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
                         SizedBox(
                           width: double.infinity, height: 60,
                           child: ElevatedButton.icon(
-                            // 🔥 ФІКС: Змінено на звичайний push
                             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: _householdId!, chatTitle: AppText.get('chat_title')))),
                             icon: const Icon(Icons.chat_bubble, color: Colors.white), label: Text(AppText.get('chat_title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
                             style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),

@@ -7,9 +7,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
-// 👇 Перевір правильність шляхів до твоїх файлів
 import 'subscription_service.dart';
-import 'premium_screen.dart'; // Або просто 'premium_screen.dart'
+import 'premium_screen.dart';
 import 'translations.dart';
 import 'secrets.dart';
 
@@ -26,22 +25,18 @@ class AdService {
   // ===========================================================================
 
   String get bannerAdUnitId {
-    // Якщо це реліз (Google Play) -> беремо твій реальний ID
     if (kReleaseMode) {
       return Secrets.bannerAdUnitId;
     }
-    // Якщо тест -> беремо тестовий ID від Google
     return Platform.isAndroid
         ? 'ca-app-pub-3940256099942544/6300978111'
         : 'ca-app-pub-3940256099942544/2934735716';
   }
 
   String get interstitialAdUnitId {
-    // Якщо це реліз -> беремо твій реальний ID
     if (kReleaseMode) {
       return Secrets.interstitialAdUnitId;
     }
-    // Якщо тест -> беремо тестовий ID від Google
     return Platform.isAndroid
         ? 'ca-app-pub-3940256099942544/1033173712'
         : 'ca-app-pub-3940256099942544/4411468910';
@@ -57,8 +52,8 @@ class AdService {
   }
 
   void _loadInterstitialAd() {
-    // Якщо користувач Premium - не вантажимо рекламу
-    if (SubscriptionService().isPremium) return;
+    // 🔥 ВИПРАВЛЕНО: Використовуємо hasProOrHigher
+    if (SubscriptionService().hasProOrHigher) return;
 
     InterstitialAd.load(
       adUnitId: interstitialAdUnitId,
@@ -69,11 +64,10 @@ class AdService {
           _isAdLoaded = true;
           debugPrint("✅ Відео-реклама готова до показу");
 
-          // Слухаємо закриття реклами, щоб одразу вантажити нову
           ad.fullScreenContentCallback = FullScreenContentCallback(
             onAdDismissedFullScreenContent: (ad) {
               ad.dispose();
-              _loadInterstitialAd(); // Вантажимо наступну
+              _loadInterstitialAd();
             },
             onAdFailedToShowFullScreenContent: (ad, err) {
               ad.dispose();
@@ -108,12 +102,10 @@ class AdService {
       final doc = await docRef.get();
       if (doc.exists) {
         final data = doc.data()!;
-        // Якщо дата збігається з сьогоднішньою -> повертаємо лічильник
         if (data['date'] == todayStr) {
           return data['count'] ?? 0;
         }
       }
-      // Якщо дати немає або вона стара -> значить сьогодні 0
       return 0;
     } catch (e) {
       debugPrint("Error reading limit: $e");
@@ -153,46 +145,37 @@ class AdService {
   // 🎬 ГОЛОВНИЙ МЕТОД: ПЕРЕВІРКА ТА ПОКАЗ
   // ===========================================================================
 
-  // Повертає true, якщо можна продовжувати дію (готувати).
-  // Повертає false, якщо ліміт вичерпано.
   Future<bool> checkAndShowAd(BuildContext context) async {
-    // 1. Якщо Premium -> реклами та лімітів немає
-    if (SubscriptionService().isPremium) return true;
+    // 🔥 ВИПРАВЛЕНО: Використовуємо hasProOrHigher
+    if (SubscriptionService().hasProOrHigher) return true;
 
     int searchCount = await _getDailySearchCount();
     debugPrint("🔎 Юзер шукав сьогодні: $searchCount разів");
 
-    // 2. Блокування після 10 спроб
+    // 🔥 ВИПРАВЛЕНО: Перевірка context.mounted після await
     if (searchCount >= 10) {
-      _showLimitDialog(context);
-      return false; // Забороняємо дію
+      if (context.mounted) {
+        _showLimitDialog(context);
+      }
+      return false;
     }
 
-    // 3. Показуємо рекламу починаючи з 3-го запиту (щоб не відлякати одразу)
-    // Тобто 1, 2, 3 запити - без реклами. 4-й і далі - з рекламою.
     if (searchCount >= 3) {
       if (_isAdLoaded && _interstitialAd != null) {
         debugPrint("🎬 Запуск відео-реклами...");
-
-        // Показуємо рекламу
         await _interstitialAd!.show();
-
-        // Звільняємо пам'ять (перезавантаження відбудеться в callback'у dismiss)
         _interstitialAd = null;
         _isAdLoaded = false;
-
-        // Збільшуємо лічильник і дозволяємо дію
         await _incrementSearchCount();
         return true;
       } else {
         debugPrint("⚠️ Реклама не готова, пропускаємо, але лічильник крутимо.");
-        _loadInterstitialAd(); // Пробуємо завантажити на майбутнє
+        _loadInterstitialAd();
         await _incrementSearchCount();
         return true;
       }
     }
 
-    // Якщо менше 3 запитів -> просто крутимо лічильник
     await _incrementSearchCount();
     return true;
   }
@@ -229,8 +212,7 @@ class AdService {
           ),
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(ctx); // Закриваємо діалог
-              // Переходимо на екран Premium
+              Navigator.pop(ctx);
               Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const PremiumScreen())
