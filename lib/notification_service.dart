@@ -62,12 +62,10 @@ class NotificationService {
 
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-    FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
-      if (message != null) _handleFirebaseNotificationClick(message);
-    });
+    // 🔥 ВИДАЛЕНО РАННІЙ ВИКЛИК getInitialMessage() - Тепер це робить main.dart!
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      _handleFirebaseNotificationClick(message);
+      handleFirebaseNotificationClick(message);
     });
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
@@ -117,14 +115,17 @@ class NotificationService {
   }
 
   // ===========================================================================
-  // НАВІГАЦІЯ ДЛЯ СЕРВЕРНИХ ПУШІВ (FIREBASE)
+  // 🔥 НАВІГАЦІЯ ДЛЯ СЕРВЕРНИХ ПУШІВ (ТЕПЕР ПУБЛІЧНА)
   // ===========================================================================
-  static void _handleFirebaseNotificationClick(RemoteMessage message) {
-    if (_navigatorKey?.currentState == null) return;
+  static void handleFirebaseNotificationClick(RemoteMessage message) {
+    if (_navigatorKey?.currentState == null) {
+      debugPrint("❌ Навігатор ще не готовий!");
+      return;
+    }
 
     _navigatorKey!.currentState!.popUntil((route) => route.isFirst);
 
-    // Зчитуємо payload, який ми передали з сервера (index.js)
+    // Зчитуємо payload, який ми передали з сервера (index.js або з Firestore)
     final String? payload = message.data['payload'];
     final String type = message.data['type'] ?? '';
 
@@ -173,44 +174,19 @@ class NotificationService {
     } catch (e) { debugPrint("Token error: $e"); }
   }
 
-  // ===========================================================================
-  // ЛОКАЛЬНІ СПОВІЩЕННЯ (СТВОРЮЮТЬСЯ В ДОДАТКУ)
-  // ===========================================================================
-  static Future<void> scheduleExpiryNotifications({
-    required String productId,
-    required String productName,
-    required DateTime expirationDate,
-  }) async {
+  // ... (Решта коду локальних пушів залишається без змін)
+  static Future<void> scheduleExpiryNotifications({required String productId, required String productName, required DateTime expirationDate}) async {
     final now = DateTime.now();
-
     final DateTime warnDate = expirationDate.subtract(const Duration(days: 1));
     final scheduledWarn = DateTime(warnDate.year, warnDate.month, warnDate.day, 9, 0, 0);
-    if (scheduledWarn.isAfter(now)) {
-      await _scheduleSingle(id: ('${productId}_warn').hashCode, title: 'Увага! Завтра зіпсується ⚠️', body: productName, date: scheduledWarn);
-    }
-
+    if (scheduledWarn.isAfter(now)) await _scheduleSingle(id: ('${productId}_warn').hashCode, title: 'Увага! Завтра зіпсується ⚠️', body: productName, date: scheduledWarn);
     final scheduledUrgent = DateTime(expirationDate.year, expirationDate.month, expirationDate.day, 9, 0, 0);
-    if (scheduledUrgent.isAfter(now)) {
-      await _scheduleSingle(id: ('${productId}_urgent').hashCode, title: 'Терміново! Сьогодні псується 🚨', body: productName, date: scheduledUrgent);
-    }
+    if (scheduledUrgent.isAfter(now)) await _scheduleSingle(id: ('${productId}_urgent').hashCode, title: 'Терміново! Сьогодні псується 🚨', body: productName, date: scheduledUrgent);
   }
 
-  static Future<void> _scheduleSingle({
-    required int id,
-    required String title,
-    required String body,
-    required DateTime date,
-  }) async {
+  static Future<void> _scheduleSingle({required int id, required String title, required String body, required DateTime date}) async {
     try {
-      await _notifications.zonedSchedule(
-        id: id,
-        title: title,
-        body: "Треба з'їсти: $body",
-        scheduledDate: tz.TZDateTime.from(date, tz.local),
-        notificationDetails: const NotificationDetails(android: AndroidNotificationDetails('reminder_channel', 'Нагадування про продукти', importance: Importance.max, priority: Priority.high)),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        payload: 'fridge',
-      );
+      await _notifications.zonedSchedule(id: id, title: title, body: "Треба з'їсти: $body", scheduledDate: tz.TZDateTime.from(date, tz.local), notificationDetails: const NotificationDetails(android: AndroidNotificationDetails('reminder_channel', 'Нагадування про продукти', importance: Importance.max, priority: Priority.high)), androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle, payload: 'fridge');
     } catch (e) { debugPrint("Schedule error: $e"); }
   }
 
@@ -223,30 +199,14 @@ class NotificationService {
     final now = tz.TZDateTime.now(tz.local);
     var scheduledDate = tz.TZDateTime(tz.local, now.year, now.month, now.day, 17, 0);
     if (scheduledDate.isBefore(now)) scheduledDate = scheduledDate.add(const Duration(days: 1));
-
     try {
-      await _notifications.zonedSchedule(
-        id: 999,
-        title: 'Час готувати вечерю! 🍳',
-        body: 'Загляньте у додаток — ми підберемо крутий рецепт з того, що є у вас вдома!',
-        scheduledDate: scheduledDate,
-        notificationDetails: const NotificationDetails(android: AndroidNotificationDetails('daily_retention_channel', 'Поради на вечір', importance: Importance.high, priority: Priority.high)),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.time,
-        payload: 'recipes',
-      );
+      await _notifications.zonedSchedule(id: 999, title: 'Час готувати вечерю! 🍳', body: 'Загляньте у додаток — ми підберемо крутий рецепт з того, що є у вас вдома!', scheduledDate: scheduledDate, notificationDetails: const NotificationDetails(android: AndroidNotificationDetails('daily_retention_channel', 'Поради на вечір', importance: Importance.high, priority: Priority.high)), androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle, matchDateTimeComponents: DateTimeComponents.time, payload: 'recipes');
     } catch (e) { debugPrint("Evening schedule error: $e"); }
   }
 
   static Future<void> showNotification({required int id, required String title, required String body, String? payload}) async {
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails('high_importance_channel', 'Важливі сповіщення', importance: Importance.max, priority: Priority.high, color: Color(0xFF4CAF50));
-    await _notifications.show(
-        id: id,
-        title: title,
-        body: body,
-        notificationDetails: const NotificationDetails(android: androidDetails),
-        payload: payload
-    );
+    await _notifications.show(id: id, title: title, body: body, notificationDetails: const NotificationDetails(android: androidDetails), payload: payload);
   }
 
   static Future<void> cancelNotification(int id) async => await _notifications.cancel(id: id);

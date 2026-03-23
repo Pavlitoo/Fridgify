@@ -67,29 +67,24 @@ class _AuthScreenState extends State<AuthScreen> {
         await _authService.signUpWithEmail(email, password, name);
         if (mounted) {
           SnackbarUtils.showSuccess(context, AppText.get('msg_account_created'));
-          _showVerificationDialog(); // Одразу показуємо діалог
         }
       }
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'email-not-verified') {
-        _showVerificationDialog();
-      } else {
-        String errorMessage = AppText.get('err_general');
-        switch (e.code) {
-          case 'invalid-credential':
-          case 'user-not-found':
-          case 'wrong-password':
-            errorMessage = AppText.get('err_login_bad');
-            break;
-          case 'email-already-in-use':
-            errorMessage = AppText.get('err_user_exists');
-            break;
-          case 'invalid-email':
-            errorMessage = AppText.get('err_email_bad');
-            break;
-        }
-        if (mounted) SnackbarUtils.showError(context, errorMessage);
+      String errorMessage = AppText.get('err_general');
+      switch (e.code) {
+        case 'invalid-credential':
+        case 'user-not-found':
+        case 'wrong-password':
+          errorMessage = AppText.get('err_login_bad');
+          break;
+        case 'email-already-in-use':
+          errorMessage = AppText.get('err_user_exists');
+          break;
+        case 'invalid-email':
+          errorMessage = AppText.get('err_email_bad');
+          break;
       }
+      if (mounted) SnackbarUtils.showError(context, errorMessage);
     } catch (e) {
       if (mounted) SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
     } finally {
@@ -124,33 +119,6 @@ class _AuthScreenState extends State<AuthScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  void _showVerificationDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(AppText.get('verify_email_title'), style: const TextStyle(fontWeight: FontWeight.bold)),
-        content: Text(AppText.get('verify_email_desc')),
-        actions: [
-          TextButton(
-            onPressed: () {
-              _authService.resendVerificationEmail();
-              Navigator.pop(ctx);
-              SnackbarUtils.showSuccess(context, AppText.get('msg_email_resent'));
-            },
-            child: Text(AppText.get('btn_resend_email'), style: const TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade600, foregroundColor: Colors.white),
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(AppText.get('btn_got_it')),
-          ),
-        ],
-      ),
-    );
   }
 
   // ---------------------------------------------------------------------------

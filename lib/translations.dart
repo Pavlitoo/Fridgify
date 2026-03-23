@@ -25,8 +25,16 @@ class AppText {
       'chat_change_bg': 'Змінити фон', 'chat_remove_bg': 'Видалити фон', 'chat_color': 'Колір повідомлень', 'chat_font_size': 'Розмір тексту', 'chat_font_sample': 'Приклад тексту', 'chat_media_only': 'Тільки медіа', 'chat_stats': 'Статистика чату', 'chat_clear_history': 'Очистити історію', 'chat_pinned': 'Закріплене повідомлення', 'chat_recipe_offer': 'Пропонує рецепт', 'chat_open_recipe': 'Відкрити рецепт', 'chat_total_votes': 'Всього голосів:', 'poll_create': 'Створити опитування', 'poll_question_hint': 'Запитання (напр. Що на вечерю?)', 'poll_option': 'Варіанти відповідей', 'poll_add_option': 'Додати варіант', 'poll_cancel': 'Скасувати', 'poll_send': 'Створити', 'chat_uploading': 'Завантаження медіа...', 'chat_copy': 'Скопіювати', 'chat_pin': 'Закріпити', 'chat_save_gallery': 'Зберегти в галерею', 'chat_download_file': 'Завантажити файл', 'chat_attachment_gallery': 'Галерея', 'chat_attachment_file': 'Документ / Файл', 'chat_attachment_poll': 'Опитування', 'chat_stats_total': 'Всього повідомлень', 'chat_stats_text': 'Текст', 'chat_stats_photo': 'Фото', 'chat_stats_voice': 'Голосові', 'chat_stats_file': 'Файли', 'chat_stats_ok': 'Зрозуміло', 'chat_voice_msg': 'Голосове повідомлення', 'chat_photo_msg': 'Фото', 'chat_poll_msg': 'Опитування', 'chat_recipe_msg': 'Рецепт', 'chat_search': 'Пошук...', 'chat_nothing_found': 'Нічого не знайдено', 'chat_release_to_send': 'Відпустіть для відправки', 'chat_silent_send': 'Відправити без звуку', 'chat_silent_desc': 'Отримувач не отримає push-сповіщення зі звуком', 'chat_seen_by': 'Переглянули', 'chat_nobody_seen': 'Ще ніхто не переглянув', 'msg_saved_gallery': 'Збережено в галерею!', 'msg_copied': 'Скопійовано', 'msg_pinned': 'Закріплено', 'msg_cleared': 'Очищено', 'msg_error': 'Помилка', 'chat_reply': 'Відповісти', 'chat_edit': 'Редагувати', 'chat_delete': 'Видалити', 'chat_personal': 'Особисті', 'chat_hint': 'Написати повідомлення...', 'chat_no_messages': 'Поки немає повідомлень', 'dialog_clear_title': 'Очистити?', 'dialog_clear_content': 'Видалити усі повідомлення?', 'chat_option_text': 'Варіант',
       'faq_q1': 'Як додати продукт?', 'faq_a1': 'Натисніть кнопку "+" внизу праворуч у вкладці "Мій Холодильник". Введіть назву, категорію та дату.', 'faq_q2': 'Як видалити продукт?', 'faq_a2': 'Натисніть на три крапки на картці продукту та оберіть "Видалити", або перемістіть його у Смітник.', 'faq_q3': 'Як працює ШІ?', 'faq_a3': 'Оберіть галочками продукти, які у вас є, та натисніть кнопку "Готувати". ШІ підбере найкращі рецепти, враховуючи ваші інгредієнти та їх кількість.', 'faq_q4': 'Як змінити мову?', 'faq_a4': 'Перейдіть у вкладку "Профіль", прокрутіть вниз до розділу налаштувань і натисніть "Мова". Оберіть бажану мову зі списку.', 'faq_q5': 'Як відновити видалений продукт?', 'faq_a5': 'Відкрийте "Смітник" (іконка у верхньому правому куті холодильника). Знайдіть продукт, натисніть меню та оберіть "Відновити".', 'faq_q6': 'Що дає Premium?', 'faq_a6': 'Premium відкриває доступ до сімейного режиму, прибирає рекламу, дає безлімітний пошук рецептів та доступ до розумнішої моделі GPT-4.', 'faq_q7': 'Як зв\'язатися з підтримкою?', 'faq_a7': 'Якщо у вас виникли питання, напишіть нам на email: pasalugovij@gmail.com. Мі з радістю допоможемо!',
       'share_recipe': 'Поділитися рецептом', 'share_external': 'Надіслано в інші додатки', 'share_external_sub': 'Telegram, Viber, Instagram...', 'no_family_share': "Створіть сім'ю в профілі, щоб ділитися рецептами у внутрішньому чаті.", 'err_share_failed': 'Не вдалося поділитися. Перевірте підключення.',
-      // 🔥 НОВІ КЛЮЧІ ДЛЯ СКАНЕРА
       'scan_title': '📸 Сканувати холодильник', 'scan_camera': 'Камера', 'scan_gallery': 'Галерея', 'scan_analyzing': 'ШІ аналізує фото...\nЦе займе кілька секунд 🪄', 'scan_not_found': 'Продуктів не знайдено 🤔', 'scan_found': 'Знайдено продуктів', 'scan_remove_extra': 'Видаліть зайве перед збереженням', 'scan_no_items': 'Немає продуктів для додавання', 'scan_save_all': 'Зберегти в холодильник', 'scan_success': '✅ Продукти успішно додано!', 'scan_error': 'Помилка збереження:',
+
+      // 🔥 АВТОРИЗАЦІЯ ТА ПЕРЕВІРКА ПОШТИ
+      'verify_email_title': 'Підтвердіть пошту 📩',
+      'verify_email_desc': 'Ми надіслали лист із посиланням на',
+      'btn_logout': 'Вийти з акаунту',
+      'btn_i_verified': 'Я вже підтвердив',
+      'btn_resend_email': 'Надіслати лист знову',
+      'msg_email_verified': 'Пошту успішно підтверджено! ✅',
+      'msg_email_resent': 'Лист надіслано повторно 📧',
     },
 
     // 🇺🇸 ENGLISH
@@ -44,8 +52,16 @@ class AppText {
       'chat_change_bg': 'Change Background', 'chat_remove_bg': 'Remove Background', 'chat_color': 'Message Color', 'chat_font_size': 'Text Size', 'chat_font_sample': 'Text Sample', 'chat_media_only': 'Media Only', 'chat_stats': 'Chat Statistics', 'chat_clear_history': 'Clear History', 'chat_pinned': 'Pinned Message', 'chat_recipe_offer': 'Suggests a recipe', 'chat_open_recipe': 'Open Recipe', 'chat_total_votes': 'Total votes:', 'poll_create': 'Create Poll', 'poll_question_hint': 'Question (e.g. What\'s for dinner?)', 'poll_option': 'Options', 'poll_add_option': 'Add Option', 'poll_cancel': 'Cancel', 'poll_send': 'Create', 'chat_uploading': 'Uploading media...', 'chat_copy': 'Copy', 'chat_pin': 'Pin', 'chat_save_gallery': 'Save to Gallery', 'chat_download_file': 'Download File', 'chat_attachment_gallery': 'Gallery', 'chat_attachment_file': 'Document / File', 'chat_attachment_poll': 'Poll', 'chat_stats_total': 'Total Messages', 'chat_stats_text': 'Text', 'chat_stats_photo': 'Photo', 'chat_stats_voice': 'Voice', 'chat_stats_file': 'Files', 'chat_stats_ok': 'Got it', 'chat_voice_msg': 'Voice message', 'chat_photo_msg': 'Photo', 'chat_poll_msg': 'Poll', 'chat_recipe_msg': 'Recipe', 'chat_search': 'Search...', 'chat_nothing_found': 'Nothing found', 'chat_release_to_send': 'Release to send', 'chat_silent_send': 'Send silently', 'chat_silent_desc': 'Recipient will not get a sound notification', 'chat_seen_by': 'Viewed by', 'chat_nobody_seen': 'Nobody viewed yet', 'msg_saved_gallery': 'Saved to gallery!', 'msg_copied': 'Copied!', 'msg_pinned': 'Pinned!', 'msg_cleared': 'Cleared!', 'msg_error': 'Error', 'chat_reply': 'Reply', 'chat_edit': 'Edit', 'chat_delete': 'Delete', 'chat_personal': 'Personal', 'chat_hint': 'Type a message...', 'chat_no_messages': 'No messages yet', 'dialog_clear_title': 'Clear?', 'dialog_clear_content': 'Delete all messages?', 'chat_option_text': 'Option',
       'faq_q1': 'How to add a product?', 'faq_a1': 'Go to the "My Fridge" tab and tap the "+" button in the bottom right. Enter the name, category, and expiry date.', 'faq_q2': 'How to delete a product?', 'faq_a2': 'Tap the three dots on the product card and select "Delete", or move it to the Trash Bin.', 'faq_q3': 'How does AI work?', 'faq_a3': 'Check the boxes for the products you have and tap "Cook". AI will find the best recipes based on your ingredients.', 'faq_q4': 'How to change language?', 'faq_a4': 'Go to the "Profile" tab, scroll down to settings, and tap "Language". Select your preferred language.', 'faq_q5': 'How to restore a product?', 'faq_a5': 'Open "Trash Bin" (top right icon in Fridge). Find the item, tap the menu, and select "Restore".', 'faq_q6': 'What does Premium give?', 'faq_a6': 'Premium unlocks family mode, removes ads, provides unlimited recipe searches, and access to the smarter GPT-4 model.', 'faq_q7': 'How to contact support?', 'faq_a7': 'If you have questions, email us at: pasalugovij@gmail.com. We are happy to help!',
       'share_recipe': 'Share Recipe', 'share_external': 'Share to other apps', 'share_external_sub': 'Telegram, Viber, Instagram...', 'no_family_share': "Create a family in your profile to share recipes in the internal chat.", 'chat_recipe_msg': 'Recipe', 'err_share_failed': 'Share failed. Check connection.',
-      // 🔥 НОВІ КЛЮЧІ ДЛЯ СКАНЕРА
       'scan_title': '📸 Scan Fridge', 'scan_camera': 'Camera', 'scan_gallery': 'Gallery', 'scan_analyzing': 'AI is analyzing...\nThis will take a few seconds 🪄', 'scan_not_found': 'No products found 🤔', 'scan_found': 'Products found', 'scan_remove_extra': 'Remove extra items before saving', 'scan_no_items': 'No items to add', 'scan_save_all': 'Save to Fridge', 'scan_success': '✅ Items added successfully!', 'scan_error': 'Save error:',
+
+      // 🔥 АВТОРИЗАЦІЯ ТА ПЕРЕВІРКА ПОШТИ
+      'verify_email_title': 'Verify Email 📩',
+      'verify_email_desc': 'We sent a verification link to',
+      'btn_logout': 'Log Out',
+      'btn_i_verified': 'I have verified',
+      'btn_resend_email': 'Resend Email',
+      'msg_email_verified': 'Email successfully verified! ✅',
+      'msg_email_resent': 'Email resent 📧',
     },
 
     // 🇪🇸 ESPAÑOL
@@ -53,17 +69,33 @@ class AppText {
       'err_login_bad': 'Correo o contraseña incorrectos', 'err_email_bad': 'Formato de correo inválido', 'err_pass_weak': 'La contraseña es demasiado débil', 'err_user_exists': 'El correo ya está en uso', 'err_too_many_requests': 'Demasiados intentos. Intenta más tarde',
       'cat_dairy': 'Lácteos', 'cat_bakery': 'Pan', 'cat_sweet': 'Dulces', 'cat_drink': 'Bebidas',
       'share_recipe': 'Compartir receta', 'share_external': 'Compartir en otras aplicaciones', 'share_external_sub': 'Telegram, Viber, Instagram...', 'no_family_share': "Crea una familia en tu perfil para compartir recetas en el chat interno.", 'chat_recipe_msg': 'Receta', 'msg_sent': 'Enviado ✅', 'err_share_failed': 'Error al compartir. Revisa tu conexión.',
-      // 🔥 НОВІ КЛЮЧІ ДЛЯ СКАНЕРА
       'scan_title': '📸 Escanear Nevera', 'scan_camera': 'Cámara', 'scan_gallery': 'Galería', 'scan_analyzing': 'La IA está analizando...\nEsto tomará unos segundos 🪄', 'scan_not_found': 'No se encontraron productos 🤔', 'scan_found': 'Productos encontrados', 'scan_remove_extra': 'Elimina elementos extra antes de guardar', 'scan_no_items': 'No hay elementos para agregar', 'scan_save_all': 'Guardar en Nevera', 'scan_success': '✅ ¡Artículos agregados!', 'scan_error': 'Error al guardar:',
+
+      // 🔥 АВТОРИЗАЦІЯ ТА ПЕРЕВІРКА ПОШТИ
+      'verify_email_title': 'Verificar correo 📩',
+      'verify_email_desc': 'Enviamos un enlace a',
+      'btn_logout': 'Cerrar sesión',
+      'btn_i_verified': 'Ya lo verifiqué',
+      'btn_resend_email': 'Reenviar correo',
+      'msg_email_verified': '¡Correo verificado! ✅',
+      'msg_email_resent': 'Correo reenviado 📧',
     },
 
     // 🇫🇷 FRANÇAIS
     'Français': {
       'err_login_bad': 'Email ou mot de passe incorrect', 'err_email_bad': 'Format d\'email invalide', 'err_pass_weak': 'Le mot de passe est trop faible',
       'cat_bakery': 'Pain', 'cat_sweet': 'Douceur', 'cat_drink': 'Boisson',
-      'share_recipe': 'Partager la recette', 'share_external': 'Partager vers d\'autres applications', 'share_external_sub': 'Telegram, Viber, Instagram...', 'no_family_share': "Créez une famille dans votre profil pour partager des recettes.", 'chat_recipe_msg': 'Recette', 'msg_sent': 'Envoyé ✅', 'err_share_failed': 'Échec du partage. Vérifiez votre connexion.',
-      // 🔥 НОВІ КЛЮЧІ ДЛЯ СКАНЕРА
+      'share_recipe': 'Partager la recette', 'share_external': 'Partager vers d\'autres applications', 'share_external_sub': 'Telegram, Viber, Instagram...', 'no_family_share': "Créez une famille dans votre profil pour partager des recettes.", 'chat_recipe_msg': 'Receta', 'msg_sent': 'Envoyé ✅', 'err_share_failed': 'Échec du partage. Vérifiez votre connexion.',
       'scan_title': '📸 Scanner le Frigo', 'scan_camera': 'Caméra', 'scan_gallery': 'Galerie', 'scan_analyzing': 'L\'IA analyse...\nCela prendra quelques secondes 🪄', 'scan_not_found': 'Aucun produit trouvé 🤔', 'scan_found': 'Produits trouvés', 'scan_remove_extra': 'Retirez les éléments en trop avant d\'enregistrer', 'scan_no_items': 'Aucun élément à ajouter', 'scan_save_all': 'Enregistrer dans le Frigo', 'scan_success': '✅ Articles ajoutés avec succès!', 'scan_error': 'Erreur de sauvegarde:',
+
+      // 🔥 АВТОРИЗАЦІЯ ТА ПЕРЕВІРКА ПОШТИ
+      'verify_email_title': 'Vérifier l\'email 📩',
+      'verify_email_desc': 'Nous avons envoyé un lien à',
+      'btn_logout': 'Déconnexion',
+      'btn_i_verified': 'J\'ai vérifié',
+      'btn_resend_email': 'Renvoyer l\'email',
+      'msg_email_verified': 'Email vérifié avec succès ! ✅',
+      'msg_email_resent': 'Email renvoyé 📧',
     },
 
     // 🇩🇪 DEUTSCH
@@ -71,8 +103,16 @@ class AppText {
       'err_login_bad': 'Falsche E-Mail oder falsches Passwort', 'err_email_bad': 'Ungültiges E-Mail-Format',
       'cat_bakery': 'Bäckerei', 'cat_sweet': 'Süßes', 'cat_drink': 'Getränke',
       'share_recipe': 'Rezept teilen', 'share_external': 'Mit anderen Apps teilen', 'share_external_sub': 'Telegram, Viber, Instagram...', 'no_family_share': "Erstellen Sie eine Familie in Ihrem Profil, um Rezepte zu teilen.", 'chat_recipe_msg': 'Rezept', 'msg_sent': 'Gesendet ✅', 'err_share_failed': 'Teilen fehlgeschlagen. Verbindung prüfen.',
-      // 🔥 НОВІ КЛЮЧІ ДЛЯ СКАНЕРА
       'scan_title': '📸 Kühlschrank Scannen', 'scan_camera': 'Kamera', 'scan_gallery': 'Galerie', 'scan_analyzing': 'KI analysiert...\nDas dauert ein paar Sekunden 🪄', 'scan_not_found': 'Keine Produkte gefunden 🤔', 'scan_found': 'Produkte gefunden', 'scan_remove_extra': 'Entfernen Sie zusätzliche Artikel vor dem Speichern', 'scan_no_items': 'Keine Artikel hinzuzufügen', 'scan_save_all': 'Im Kühlschrank Speichern', 'scan_success': '✅ Artikel erfolgreich hinzugefügt!', 'scan_error': 'Speicherfehler:',
+
+      // 🔥 АВТОРИЗАЦІЯ ТА ПЕРЕВІРКА ПОШТИ
+      'verify_email_title': 'E-Mail bestätigen 📩',
+      'verify_email_desc': 'Wir haben einen Link gesendet an',
+      'btn_logout': 'Abmelden',
+      'btn_i_verified': 'Ich habe bestätigt',
+      'btn_resend_email': 'E-Mail erneut senden',
+      'msg_email_verified': 'E-Mail erfolgreich bestätigt! ✅',
+      'msg_email_resent': 'E-Mail erneut gesendet 📧',
     },
   };
 }

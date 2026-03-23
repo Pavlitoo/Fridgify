@@ -79,7 +79,7 @@ class AuthService {
   }
 
   // ===========================================================================
-  // 📧 EMAIL: ВХІД (З ПЕРЕВІРКОЮ ВЕРИФІКАЦІЇ)
+  // 📧 EMAIL: ВХІД
   // ===========================================================================
   Future<User?> signInWithEmail(String email, String password) async {
     try {
@@ -87,19 +87,7 @@ class AuthService {
         email: email,
         password: password,
       );
-
-      final User? user = userCredential.user;
-
-      // 🔥 ЖОРСТКИЙ КАРАНТИН: Якщо пошта не підтверджена - не пускаємо!
-      if (user != null && !user.emailVerified) {
-        await _auth.signOut(); // Одразу викидаємо
-        throw FirebaseAuthException(
-          code: 'email-not-verified',
-          message: 'Будь ласка, підтвердіть вашу пошту за посиланням у листі.',
-        );
-      }
-
-      return user;
+      return userCredential.user;
     } catch (e) {
       debugPrint("❌ Помилка входу Email: $e");
       rethrow;
@@ -107,7 +95,7 @@ class AuthService {
   }
 
   // ===========================================================================
-  // 📧 EMAIL: РЕЄСТРАЦІЯ (ПРОФЕСІЙНА)
+  // 📧 EMAIL: РЕЄСТРАЦІЯ
   // ===========================================================================
   Future<User?> signUpWithEmail(String email, String password, String name) async {
     try {
@@ -121,11 +109,10 @@ class AuthService {
       if (user != null) {
         await user.updateDisplayName(name);
 
-        // Відправляємо лист і ПРИМУСОВО ВИХОДИМО
+        // Відправляємо лист, але залишаємо юзера в системі для AuthGate
         if (!user.emailVerified) {
           await user.sendEmailVerification();
           debugPrint("📧 Лист верифікації надіслано!");
-          await _auth.signOut();
         }
 
         await _saveUserToFirestore(user, customName: name);

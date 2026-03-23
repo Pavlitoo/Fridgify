@@ -13,10 +13,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'translations.dart';
 import 'notification_service.dart';
-// 🔥 ІМПОРТ CHATPUSHSERVICE ВИДАЛЕНО
 import 'subscription_service.dart';
 import 'global.dart';
 
+// 🔥 ДОДАНИЙ ІМПОРТ НОВОГО ШЛЮЗУ
+import 'screens/auth_gate.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/no_internet_screen.dart';
@@ -92,7 +93,6 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
 
     try {
       await NotificationService.init(navigatorKey);
-      // 🔥 ВИКЛИК CHATPUSHSERVICE.INIT ВИДАЛЕНО
       await SubscriptionService().init();
       if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
         await MobileAds.instance.initialize();
@@ -107,11 +107,15 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
       setState(() { _hasInternet = true; _isCoreInitialized = true; _isLoading = false; });
 
       WidgetsBinding.instance.addPostFrameCallback((_) async {
-        await Future.delayed(const Duration(milliseconds: 1000));
+        // 🔥 ДАЄМО ДОДАТКУ 1.5 СЕКУНДИ, ЩОБ ПОВНІСТЮ ВІДМАЛЮВАТИ УСІ ЕКРАНИ
+        await Future.delayed(const Duration(milliseconds: 1500));
+
         try {
           final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
           if (initialMessage != null) {
             debugPrint("🔥 Запущено з пуша: ${initialMessage.data}");
+            // 🔥 ВИКЛИКАЄМО НАВІГАЦІЮ ТУТ, КОЛИ НАВІГАТОР ВЖЕ ТОЧНО ГОТОВИЙ!
+            NotificationService.handleFirebaseNotificationClick(initialMessage);
           }
         } catch (e) {
           debugPrint("Помилка обробки initialMessage: $e");
@@ -215,14 +219,8 @@ class SmartFridgeApp extends StatelessWidget {
                 localizationsDelegates: const [GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
                 supportedLocales: const [Locale('en', 'US'), Locale('uk', 'UA'), Locale('es', 'ES'), Locale('fr', 'FR'), Locale('de', 'DE')],
 
-                home: StreamBuilder<User?>(
-                  stream: FirebaseAuth.instance.authStateChanges(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) return const Scaffold(body: Center(child: CircularProgressIndicator(color: Colors.green)));
-                    if (snapshot.hasData) return const HomeScreen();
-                    return const AuthScreen();
-                  },
-                ),
+                // 🔥 ОСЬ ГОЛОВНА ЗМІНА:
+                home: const AuthGate(),
               );
             }
         );
