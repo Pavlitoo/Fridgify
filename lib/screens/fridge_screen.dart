@@ -244,21 +244,38 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
   Future<void> _emptyTrashBin(List<Product> trashProducts, CollectionReference collection) async {
     if (trashProducts.isEmpty) return;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // 🔥 ОНОВЛЕНИЙ МАТЕРІАЛ-ДИЗАЙН ДЛЯ ВІКНА ВИДАЛЕННЯ З ПРАВИЛЬНИМ ПЕРЕКЛАДОМ
     bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         backgroundColor: Theme.of(context).cardColor,
-        title: Text(AppText.get('trash_title')),
-        content: const Text("Ви впевнені, що хочете назавжди видалити всі продукти зі смітника? Цю дію неможливо скасувати."),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.red),
+            const SizedBox(width: 10),
+            Text(AppText.get('trash_title'), style: const TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          AppText.get('dialog_clear_trash_desc'),
+          style: TextStyle(color: isDark ? Colors.grey.shade300 : Colors.grey.shade700, height: 1.4),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(AppText.get('cancel')),
+            child: Text(AppText.get('cancel'), style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            child: Text(AppText.get('btn_delete_forever')),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+            ),
+            child: Text(AppText.get('btn_delete_forever'), style: const TextStyle(fontWeight: FontWeight.bold)),
           )
         ],
       ),
@@ -276,7 +293,7 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
 
       if (mounted) {
         Navigator.pop(context);
-        SnackbarUtils.showSuccess(context, "Смітник повністю очищено! 🧹");
+        SnackbarUtils.showSuccess(context, AppText.get('msg_trash_cleared')); // 🔥 ПОВНІСТЮ ПЕРЕКЛАДЕНО
       }
     } catch (e) {
       if (mounted) SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
@@ -287,19 +304,20 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         backgroundColor: Theme.of(context).cardColor,
-        title: Text(AppText.get('btn_delete_forever')),
+        title: Text(AppText.get('btn_delete_forever'), style: const TextStyle(fontWeight: FontWeight.bold)),
         content: Text(AppText.get('no_delete')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppText.get('cancel'))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppText.get('cancel'), style: const TextStyle(color: Colors.grey))),
           ElevatedButton(
             onPressed: () {
               _deleteProductForever(product, collection);
               Navigator.pop(ctx);
               SnackbarUtils.showWarning(context, AppText.get('msg_deleted_forever'));
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            child: const Text("OK"),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            child: Text(AppText.get('btn_ok'), style: const TextStyle(fontWeight: FontWeight.bold)), // 🔥 ПОВНІСТЮ ПЕРЕКЛАДЕНО
           )
         ],
       ),
@@ -361,7 +379,7 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
                         trashProducts.isNotEmpty
                             ? IconButton(
                           icon: const Icon(Icons.cleaning_services_rounded, color: Colors.red),
-                          tooltip: "Очистити все",
+                          tooltip: AppText.get('tooltip_clear_all'), // 🔥 ПОВНІСТЮ ПЕРЕКЛАДЕНО
                           onPressed: () => _emptyTrashBin(trashProducts, collection),
                         )
                             : const SizedBox(width: 48),
@@ -439,7 +457,7 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text("${product.quantity} ${AppText.get('u_${product.unit}')}", style: TextStyle(fontSize: 14, color: textColor?.withValues(alpha: 0.7))),
+            Text("${product.quantity} ${AppText.get('u_${product.unit}') ?? product.unit}", style: TextStyle(fontSize: 14, color: textColor?.withValues(alpha: 0.7))),
             const SizedBox(height: 10),
             TextField(
               controller: consumeController,
@@ -468,7 +486,7 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
               if (consumed <= 0) return;
 
               if (consumed > product.quantity) {
-                SnackbarUtils.showError(context, "Не можна з'їсти більше, ніж є!");
+                SnackbarUtils.showError(context, AppText.get('err_eat_too_much')); // 🔥 ПОВНІСТЮ ПЕРЕКЛАДЕНО
                 return;
               }
 
@@ -509,7 +527,7 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
               SnackbarUtils.showWarning(context, "${AppText.get('status_deleted')} 🗑");
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            child: const Text("OK"),
+            child: Text(AppText.get('btn_ok')), // 🔥 ПОВНІСТЮ ПЕРЕКЛАДЕНО
           )
         ],
       ),
@@ -842,7 +860,6 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
             return Scaffold(
               backgroundColor: bgColor,
               appBar: AppBar(
-                // 🔥 ТУТ МИ РОЗМІСТИЛИ КНОПКУ СКАНЕРА ЗЛІВА
                 leading: IconButton(
                   icon: const Icon(Icons.document_scanner_outlined, color: Colors.blue, size: 28),
                   tooltip: AppText.get('scan_title'),
@@ -878,6 +895,7 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
                         final product = visibleProducts[i];
                         final isSelected = _selectedProductIds.contains(product.id);
                         Color statusColor = product.daysLeft < 3 ? Colors.orange : Colors.green;
+
                         String timeLeftText = product.daysLeft < 30 ? "${product.daysLeft} ${AppText.get('u_days')}" : "${(product.daysLeft / 30).floor()} ${AppText.get('u_months')}";
                         final catData = appCategories.firstWhere((c) => c.id == product.category, orElse: () => appCategories[0]);
 
@@ -896,7 +914,7 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
                                 child: ListTile(
                                   contentPadding: EdgeInsets.zero,
                                   leading: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: catData.color.withValues(alpha: 0.15), shape: BoxShape.circle), child: Icon(catData.icon, color: catData.color, size: 28)),
-                                  title: Row(children: [Expanded(child: Text(product.name, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isSelected ? Colors.black : textColor))), const SizedBox(width: 8), Text("(${product.quantity} ${AppText.get('u_${product.unit}')})", style: const TextStyle(color: Colors.grey, fontSize: 14))]),
+                                  title: Row(children: [Expanded(child: Text(product.name, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isSelected ? Colors.black : textColor))), const SizedBox(width: 8), Text("(${product.quantity} ${AppText.get('u_${product.unit}') ?? product.unit})", style: const TextStyle(color: Colors.grey, fontSize: 14))]),
                                   subtitle: Row(children: [Icon(Icons.timer_outlined, size: 16, color: statusColor), const SizedBox(width: 4), Text(timeLeftText, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 14))]),
                                   trailing: PopupMenuButton<String>(
                                     icon: const Icon(Icons.more_vert, color: Colors.grey),
@@ -929,7 +947,6 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
                 ],
               ),
 
-              // 🔥 ПОВЕРНУЛИ СТАРУ ЛОГІКУ КНОПОК
               floatingActionButton: _selectedProductIds.isNotEmpty
                   ? FloatingActionButton.extended(
                   onPressed: () => _checkLimitAndSearch(allProducts),

@@ -35,6 +35,12 @@ class AppText {
       'btn_resend_email': 'Надіслати лист знову',
       'msg_email_verified': 'Пошту успішно підтверджено! ✅',
       'msg_email_resent': 'Лист надіслано повторно 📧',
+
+      // 🔥 КОШИК (СМІТНИК)
+      'dialog_clear_trash_desc': 'Ви впевнені, що хочете назавжди видалити всі продукти зі смітника? Цю дію неможливо скасувати.',
+      'msg_trash_cleared': 'Смітник повністю очищено! 🧹',
+      'tooltip_clear_all': 'Очистити все',
+      'err_eat_too_much': 'Не можна з\'їсти більше, ніж є!',
     },
 
     // 🇺🇸 ENGLISH
@@ -62,6 +68,12 @@ class AppText {
       'btn_resend_email': 'Resend Email',
       'msg_email_verified': 'Email successfully verified! ✅',
       'msg_email_resent': 'Email resent 📧',
+
+      // 🔥 КОШИК (СМІТНИК)
+      'dialog_clear_trash_desc': 'Are you sure you want to permanently delete all items from the trash bin? This cannot be undone.',
+      'msg_trash_cleared': 'Trash bin cleared! 🧹',
+      'tooltip_clear_all': 'Clear all',
+      'err_eat_too_much': 'Cannot eat more than you have!',
     },
 
     // 🇪🇸 ESPAÑOL
@@ -79,6 +91,12 @@ class AppText {
       'btn_resend_email': 'Reenviar correo',
       'msg_email_verified': '¡Correo verificado! ✅',
       'msg_email_resent': 'Correo reenviado 📧',
+
+      // 🔥 КОШИК (СМІТНИК)
+      'dialog_clear_trash_desc': '¿Estás seguro de que quieres eliminar permanentemente todos los artículos de la papelera? Esta acción no se puede deshacer.',
+      'msg_trash_cleared': '¡Papelera vaciada! 🧹',
+      'tooltip_clear_all': 'Borrar todo',
+      'err_eat_too_much': '¡No puedes comer más de lo que tienes!',
     },
 
     // 🇫🇷 FRANÇAIS
@@ -96,6 +114,12 @@ class AppText {
       'btn_resend_email': 'Renvoyer l\'email',
       'msg_email_verified': 'Email vérifié avec succès ! ✅',
       'msg_email_resent': 'Email renvoyé 📧',
+
+      // 🔥 КОШИК (СМІТНИК)
+      'dialog_clear_trash_desc': 'Êtes-vous sûr de vouloir supprimer définitivement tous les articles de la corbeille ? Cette action est irréversible.',
+      'msg_trash_cleared': 'Corbeille vidée ! 🧹',
+      'tooltip_clear_all': 'Tout effacer',
+      'err_eat_too_much': 'Impossible de manger plus que ce que vous avez !',
     },
 
     // 🇩🇪 DEUTSCH
@@ -113,6 +137,12 @@ class AppText {
       'btn_resend_email': 'E-Mail erneut senden',
       'msg_email_verified': 'E-Mail erfolgreich bestätigt! ✅',
       'msg_email_resent': 'E-Mail erneut gesendet 📧',
+
+      // 🔥 КОШИК (СМІТНИК)
+      'dialog_clear_trash_desc': 'Möchten Sie wirklich alle Elemente im Papierkorb endgültig löschen? Dies kann nicht rückgängig gemacht werden.',
+      'msg_trash_cleared': 'Papierkorb geleert! 🧹',
+      'tooltip_clear_all': 'Alles löschen',
+      'err_eat_too_much': 'Du kannst nicht mehr essen, als du hast!',
     },
   };
 }

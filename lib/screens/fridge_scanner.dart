@@ -10,57 +10,59 @@ class FridgeScanner {
   static Future<void> startScan(BuildContext context, CollectionReference collection, String userLang) async {
     final picker = ImagePicker();
 
-    // 1. ВИБІР ДЖЕРЕЛА (Камера / Галерея)
-    final ImageSource? source = await showDialog<ImageSource>(
-        context: context,
-        builder: (ctx) {
-          final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    // 1. ВИБІР ДЖЕРЕЛА (Стильний Material Bottom Sheet)
+    final ImageSource? source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext ctx) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final textColor = Theme.of(context).textTheme.bodyLarge?.color;
 
-          return Dialog(
-            backgroundColor: Theme.of(context).cardColor,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: const EdgeInsets.only(top: 12, bottom: 30, left: 24, right: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(10))),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), shape: BoxShape.circle),
-                    child: const Icon(Icons.document_scanner_rounded, color: Colors.blue, size: 36),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                      AppText.get('scan_title'),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: textColor)
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      _buildOptionBtn(
-                          context,
-                          text: AppText.get('scan_camera'),
-                          icon: Icons.camera_alt_rounded,
-                          color: Colors.blue,
-                          source: ImageSource.camera
-                      ),
-                      const SizedBox(width: 16),
-                      _buildOptionBtn(
-                          context,
-                          text: AppText.get('scan_gallery'),
-                          icon: Icons.photo_library_rounded,
-                          color: Colors.purple,
-                          source: ImageSource.gallery
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
+                  const Icon(Icons.document_scanner_rounded, color: Colors.blue, size: 28),
+                  const SizedBox(width: 10),
+                  Text(AppText.get('scan_title'), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor)),
                 ],
               ),
-            ),
-          );
-        }
+              const SizedBox(height: 8),
+              Text(AppText.get('scan_analyzing').split('\n').first, style: const TextStyle(color: Colors.grey)), // Використовуємо першу частину фрази як підказку
+              const SizedBox(height: 30),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildOptionBtn(
+                    context,
+                    text: AppText.get('scan_camera'),
+                    icon: Icons.camera_alt_rounded,
+                    color: Colors.blue,
+                    source: ImageSource.camera,
+                  ),
+                  _buildOptionBtn(
+                    context,
+                    text: AppText.get('scan_gallery'),
+                    icon: Icons.photo_library_rounded,
+                    color: Colors.purple,
+                    source: ImageSource.gallery,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
 
     if (source == null) return;
@@ -86,8 +88,7 @@ class FridgeScanner {
 
       if (!context.mounted) return;
 
-      // Закриваємо красивий лоадер сканера
-      Navigator.of(context, rootNavigator: true).pop();
+      Navigator.of(context, rootNavigator: true).pop(); // Закриваємо лоадер
 
       if (items.isEmpty) {
         SnackbarUtils.showWarning(context, AppText.get('scan_not_found'));
@@ -99,34 +100,30 @@ class FridgeScanner {
 
     } catch (e) {
       if (context.mounted) {
-        Navigator.of(context, rootNavigator: true).pop(); // Закриваємо лоадер у разі помилки
+        Navigator.of(context, rootNavigator: true).pop();
         SnackbarUtils.showError(context, "${AppText.get('scan_error')} $e");
       }
     }
   }
 
+  // 🔥 Допоміжна кнопка для красивого вибору джерела
   static Widget _buildOptionBtn(BuildContext context, {required String text, required IconData icon, required Color color, required ImageSource source}) {
-    return Expanded(
-      child: Material(
-        color: color.withOpacity(0.1),
+    return Material(
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: () => Navigator.pop(context, source),
         borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          onTap: () => Navigator.pop(context, source),
-          borderRadius: BorderRadius.circular(20),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 40, color: color),
-                const SizedBox(height: 12),
-                Text(
-                    text,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 16)
-                ),
-              ],
-            ),
+        child: Container(
+          width: 120,
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 40, color: color),
+              const SizedBox(height: 12),
+              Text(text, textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 16)),
+            ],
           ),
         ),
       ),
@@ -183,7 +180,7 @@ class FridgeScanner {
                           child: ListTile(
                             leading: Container(
                               padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), shape: BoxShape.circle),
+                              decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), shape: BoxShape.circle),
                               child: const Icon(Icons.check, color: Colors.blue, size: 20),
                             ),
                             title: Text(item['name'], style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
@@ -207,10 +204,8 @@ class FridgeScanner {
                     padding: const EdgeInsets.only(bottom: 30, top: 10),
                     child: ElevatedButton.icon(
                       onPressed: confirmedItems.isEmpty ? null : () async {
-                        // 1. Спочатку закриваємо BottomSheet
                         Navigator.pop(ctx);
 
-                        // 2. Показуємо лоадер збереження (ЗІ СВОЇМ ВЛАСНИМ КОНТЕКСТОМ)
                         showDialog(
                             context: context,
                             barrierDismissible: false,
@@ -236,7 +231,6 @@ class FridgeScanner {
                           await batch.commit();
 
                           if (context.mounted) {
-                            // 3. ФІКС ВІЧНОГО СПІНЕРА: закриваємо найвищий діалог надійно
                             Navigator.of(context, rootNavigator: true).pop();
                             SnackbarUtils.showSuccess(context, AppText.get('scan_success'));
                           }
@@ -266,7 +260,7 @@ class FridgeScanner {
 }
 
 // ============================================================================
-// 🔥 НОВИЙ ВІДЖЕТ АНІМОВАНОГО СКАНЕРА
+// 🔥 АНІМОВАНИЙ СКАНЕР
 // ============================================================================
 class _ScanningLoader extends StatefulWidget {
   final File imageFile;
@@ -283,9 +277,7 @@ class _ScanningLoaderState extends State<_ScanningLoader> with SingleTickerProvi
   @override
   void initState() {
     super.initState();
-    // Анімація триває 2 секунди вниз, і 2 секунди вгору (reverse)
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 2))
-      ..repeat(reverse: true);
+    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
   }
 
   @override
@@ -303,7 +295,6 @@ class _ScanningLoaderState extends State<_ScanningLoader> with SingleTickerProvi
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Блок з картинкою та лазером
           ClipRRect(
             borderRadius: BorderRadius.circular(24),
             child: SizedBox(
@@ -312,18 +303,13 @@ class _ScanningLoaderState extends State<_ScanningLoader> with SingleTickerProvi
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // Оригінальне фото
                   Image.file(widget.imageFile, fit: BoxFit.cover),
-
-                  // Легке затемнення, щоб лазер виглядав яскравіше
-                  Container(color: Colors.black.withOpacity(0.3)),
-
-                  // Лазер, що рухається
+                  Container(color: Colors.black.withValues(alpha: 0.3)),
                   AnimatedBuilder(
                     animation: _controller,
                     builder: (context, child) {
                       return Positioned(
-                        top: _controller.value * 350, // Рух від 0 до 350px вниз
+                        top: _controller.value * 350,
                         left: 0,
                         right: 0,
                         child: Container(
@@ -332,61 +318,35 @@ class _ScanningLoaderState extends State<_ScanningLoader> with SingleTickerProvi
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.blueAccent.withOpacity(0.0),
-                                Colors.blueAccent.withOpacity(0.8),
-                                Colors.cyanAccent,
-                              ],
+                              colors: [Colors.blueAccent.withValues(alpha: 0.0), Colors.blueAccent.withValues(alpha: 0.8), Colors.cyanAccent],
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.blueAccent.withOpacity(0.5),
-                                blurRadius: 15,
-                                spreadRadius: 5,
-                                offset: const Offset(0, 0),
-                              ),
-                            ],
+                            boxShadow: [BoxShadow(color: Colors.blueAccent.withValues(alpha: 0.5), blurRadius: 15, spreadRadius: 5, offset: const Offset(0, 0))],
                           ),
                         ),
                       );
                     },
                   ),
-
-                  // Декоративна рамка сканера ("приціл")
                   Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.blueAccent.withOpacity(0.5), width: 2),
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                    ),
+                    child: Container(decoration: BoxDecoration(border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.5), width: 2), borderRadius: BorderRadius.circular(24))),
                   ),
                 ],
               ),
             ),
           ),
-
           const SizedBox(height: 24),
-
-          // Текст "Аналізуємо..."
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
             decoration: BoxDecoration(
                 color: Theme.of(context).cardColor,
                 borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))
-                ]
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))]
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.blue)),
                 const SizedBox(width: 16),
-                Text(
-                  AppText.get('scan_analyzing'),
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Theme.of(context).textTheme.bodyLarge?.color),
-                ),
+                Text(AppText.get('scan_analyzing').replaceAll('\n', ' '), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Theme.of(context).textTheme.bodyLarge?.color)),
               ],
             ),
           )
