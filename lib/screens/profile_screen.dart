@@ -210,7 +210,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final dividerColor = Theme.of(context).dividerColor;
           const tilePadding = EdgeInsets.symmetric(horizontal: 24, vertical: 16);
 
-          final bool hasAnyPremium = _currentTier != SubTier.free;
+          // 🔥 РОЗУМНА КНОПКА: Визначаємо текст, колір та іконку залежно від підписки
+          String buttonText = AppText.get('prem_btn_buy'); // Дефолт (Безкоштовний)
+          Color buttonColor = Colors.green; // Колір для заохочення купити
+          IconData buttonIcon = Icons.star_border;
+
+          if (_currentTier == SubTier.pro) {
+            buttonText = AppText.get('prem_pro_active');
+            buttonColor = Colors.blue.shade600; // Синій для PRO
+            buttonIcon = Icons.verified;
+          } else if (_currentTier == SubTier.family) {
+            buttonText = AppText.get('prem_family_active');
+            buttonColor = Colors.amber.shade700; // Золотий для Family
+            buttonIcon = Icons.diamond;
+          }
 
           return Scaffold(
             backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -228,18 +241,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 if (user.email != null && user.email!.isNotEmpty) Text(user.email!, style: TextStyle(fontSize: 16, color: textColor.withOpacity(0.6))),
                 const SizedBox(height: 30),
 
+                // 🔥 РОЗУМНА КНОПКА ПІДПИСКИ
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: _handlePremiumButton,
-                    icon: Icon(hasAnyPremium ? Icons.check_circle : Icons.star, color: Colors.white),
+                    icon: Icon(buttonIcon, color: Colors.white),
                     label: Text(
-                        hasAnyPremium ? AppText.get('prem_active') : AppText.get('prem_btn_buy'),
+                        buttonText,
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)
                     ),
                     style: ElevatedButton.styleFrom(
-                        backgroundColor: hasAnyPremium ? Colors.green : Colors.amber,
+                        backgroundColor: buttonColor,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                         elevation: 6
@@ -266,7 +280,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ListTile(contentPadding: tilePadding, leading: _buildIcon(Icons.help_outline, Colors.teal), title: Text(AppText.get('faq_title'), style: _tileStyle(textColor)), trailing: _arrow(), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const FaqScreen()))),
                   const Divider(height: 1),
 
-                  // 🔥 ВИПРАВЛЕНО: Тепер пускаємо ВСІХ на екран сім'ї!
                   ListTile(
                       contentPadding: tilePadding,
                       leading: _buildIcon(Icons.people, Colors.pink),

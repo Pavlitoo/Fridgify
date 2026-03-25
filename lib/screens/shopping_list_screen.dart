@@ -81,7 +81,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     }
   }
 
-  // 🔥 НОВЕ: Красиве вікно при покупці зі списку
+  // 🔥 НОВЕ: Красиве вікно при покупці зі списку зі швидкими датами
   Future<bool> _showBuyDialog(String docId, Map<String, dynamic> data, String? householdId) async {
     final nameController = TextEditingController(text: data['name']);
     final qtyController = TextEditingController(text: data['quantity'].toString());
@@ -90,6 +90,23 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     String selectedCategory = 'other';
 
     bool isAddedToFridge = false;
+
+    // 🔥 ДОПОМІЖНА ФУНКЦІЯ ДЛЯ КНОПОК ДАТ (Тепер з правильним перекладом!)
+    Widget buildDateChip(int days, DateTime currentDate, Function(DateTime) onSelect) {
+      final targetDate = DateTime.now().add(Duration(days: days));
+      // Вважаємо кнопку "обраною", якщо дати збігаються (порівнюємо рік, місяць, день)
+      final isSelected = targetDate.year == currentDate.year &&
+          targetDate.month == currentDate.month &&
+          targetDate.day == currentDate.day;
+
+      return ActionChip(
+        // Ось тут ми додали AppText.get('u_days') замість жорсткого "дн."
+        label: Text("+$days ${AppText.get('u_days')}", style: TextStyle(color: isSelected ? Colors.white : Colors.grey.shade700, fontSize: 12, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+        backgroundColor: isSelected ? Colors.green : Colors.grey.shade200,
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+        onPressed: () => onSelect(targetDate),
+      );
+    }
 
     await showDialog(
       context: context,
@@ -123,11 +140,43 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                     Text(AppText.get('category_label'), style: TextStyle(color: textColor?.withOpacity(0.7), fontWeight: FontWeight.bold)),
                     const SizedBox(height: 12),
                     Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 10, children: appCategories.map((cat) { final isSelected = selectedCategory == cat.id; return InkWell(onTap: () => setDialogState(() => selectedCategory = cat.id), child: Column(mainAxisSize: MainAxisSize.min, children: [AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: isSelected ? cat.color : inputFill, shape: BoxShape.circle, boxShadow: isSelected ? [BoxShadow(color: cat.color.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))] : []), child: Icon(cat.icon, color: isSelected ? Colors.white : Colors.grey, size: 28)), const SizedBox(height: 4), Text(AppText.get(cat.labelKey), style: TextStyle(fontSize: 10, color: isSelected ? cat.color : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal))])); }).toList()),
-                    const SizedBox(height: 30),
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      Text(AppText.get('days_valid'), style: TextStyle(fontSize: 16, color: textColor?.withOpacity(0.7))),
-                      InkWell(onTap: () async { final DateTime? picked = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365 * 10)), locale: getAppLocale(languageNotifier.value)); if (picked != null && picked != selectedDate) { setDialogState(() { selectedDate = picked; }); } }, child: Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), decoration: BoxDecoration(color: Colors.green.shade50.withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green)), child: Row(children: [const Icon(Icons.calendar_today, size: 18, color: Colors.green), const SizedBox(width: 8), Text(formattedDate, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16))]))),
-                    ])
+                    const SizedBox(height: 24),
+
+                    // 🔥 БЛОК ДАТИ ЗІ ШВИДКИМИ КНОПКАМИ
+                    Align(alignment: Alignment.centerLeft, child: Text(AppText.get('days_valid'), style: TextStyle(color: textColor?.withOpacity(0.7), fontWeight: FontWeight.bold))),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        buildDateChip(3, selectedDate, (d) => setDialogState(() => selectedDate = d)),
+                        buildDateChip(7, selectedDate, (d) => setDialogState(() => selectedDate = d)),
+                        buildDateChip(14, selectedDate, (d) => setDialogState(() => selectedDate = d)),
+                        buildDateChip(30, selectedDate, (d) => setDialogState(() => selectedDate = d)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                        onTap: () async {
+                          final DateTime? picked = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365 * 10)), locale: getAppLocale(languageNotifier.value));
+                          if (picked != null && picked != selectedDate) {
+                            setDialogState(() { selectedDate = picked; });
+                          }
+                        },
+                        child: Container(
+                            width: double.infinity,
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(color: Colors.green.shade50.withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green)),
+                            child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.calendar_today, size: 18, color: Colors.green),
+                                  const SizedBox(width: 8),
+                                  Text(formattedDate, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16))
+                                ]
+                            )
+                        )
+                    ),
                   ],
                 ),
               ),

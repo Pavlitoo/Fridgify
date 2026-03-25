@@ -17,11 +17,11 @@ import '../global.dart';
 import '../error_handler.dart';
 import '../utils/snackbar_utils.dart';
 import 'recipe_detail_screen.dart';
-import 'fridge_scanner.dart';
 
 // 🔥 ПІДКЛЮЧАЄМО НАШІ НОВІ КОМПОНЕНТИ
 import 'fridge_dialogs.dart';
 import '../widgets/product_list_item.dart';
+import 'receipt_scanner.dart'; // <--- ДОДАНО ІМПОРТ НОВОГО СКАНЕРА ЧЕКІВ
 
 // --- МОДЕЛІ ---
 class CategoryData {
@@ -110,7 +110,6 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
 
   void _initAds() {
     AdService().init();
-    // 🔥 ВИПРАВЛЕНО: Перевіряємо чи є хоча б PRO рівень
     if (!SubscriptionService().hasProOrHigher) _loadBannerAd();
   }
 
@@ -474,8 +473,15 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
             return Scaffold(
               backgroundColor: bgColor,
               appBar: AppBar(
-                leading: IconButton(icon: const Icon(Icons.document_scanner_outlined, color: Colors.blue, size: 28), tooltip: AppText.get('scan_title'), onPressed: () => FridgeScanner.startScan(context, collection, languageNotifier.value)),
-                title: Text(AppText.get('my_fridge')), backgroundColor: Theme.of(context).appBarTheme.backgroundColor, centerTitle: true,
+                // 🔥 НОВА КНОПКА СКАНЕРА ЧЕКІВ
+                leading: IconButton(
+                    icon: const Icon(Icons.receipt_long, color: Colors.blue, size: 28),
+                    tooltip: "Сканувати чек",
+                    onPressed: () => ReceiptScanner.startScan(context, collection, languageNotifier.value)
+                ),
+                title: Text(AppText.get('my_fridge')),
+                backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+                centerTitle: true,
                 actions: [
                   IconButton(icon: Icon(Icons.delete_sweep_outlined, color: trashProducts.isEmpty ? Colors.grey.withValues(alpha: 0.5) : Colors.red), onPressed: () => trashProducts.isEmpty ? SnackbarUtils.showWarning(context, AppText.get('trash_empty')) : _openTrashBin(collection, shopListCollection)),
                 ],
@@ -495,7 +501,6 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
                         final product = visibleProducts[i];
                         return SlideInAnimation(
                           delay: i * 50,
-                          // 🔥 ВИКЛИКАЄМО НАШ НОВИЙ ВІДЖЕТ
                           child: ProductListItem(
                             product: product,
                             isSelected: _selectedProductIds.contains(product.id),
@@ -512,13 +517,11 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
                       },
                     ),
                   ),
-                  // 🔥 ВИПРАВЛЕНО: Перевіряємо чи є хоча б PRO рівень
                   if (_bannerAd != null && _isBannerLoaded && !SubscriptionService().hasProOrHigher) Container(alignment: Alignment.center, width: _bannerAd!.size.width.toDouble(), height: _bannerAd!.size.height.toDouble(), child: AdWidget(ad: _bannerAd!)),
                 ],
               ),
               floatingActionButton: _selectedProductIds.isNotEmpty
                   ? FloatingActionButton.extended(onPressed: () => _checkLimitAndSearch(allProducts), label: Text(AppText.get('cook_btn'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)), icon: const Icon(Icons.restaurant_menu, size: 28), backgroundColor: Colors.deepOrange, foregroundColor: Colors.white, elevation: 4)
-              // 🔥 ВИКЛИКАЄМО НОВИЙ ДІАЛОГ ДОДАВАННЯ
                   : SizedBox(width: 65, height: 65, child: FloatingActionButton(onPressed: () => FridgeDialogs.showProductDialog(context: context, collection: collection, categories: appCategories, cancelNotification: (id) => NotificationService.cancelNotification(id)), backgroundColor: Colors.green.shade600, foregroundColor: Colors.white, elevation: 4, shape: const CircleBorder(), child: const Icon(Icons.add, size: 36))),
             );
           },
