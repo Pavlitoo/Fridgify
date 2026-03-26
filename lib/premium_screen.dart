@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'subscription_service.dart';
 import 'translations.dart';
+import 'screens/home_screen.dart';
 
 class PremiumScreen extends StatefulWidget {
   const PremiumScreen({super.key});
@@ -77,18 +78,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
             child: SafeArea(
               child: Stack(
                 children: [
-                  // Кнопка закриття (Хрестик)
-                  Align(
-                    alignment: Alignment.topRight,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white70, size: 30),
-                        onPressed: () => Navigator.pop(context, currentTier != SubTier.free),
-                      ),
-                    ),
-                  ),
-
+                  // 1. СПОЧАТКУ ЙДЕ СКРОЛ (щоб він був під хрестиком)
                   SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
                     child: Column(
@@ -140,6 +130,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                             AppText.get('prem_fam_ben_2'),
                             AppText.get('prem_fam_ben_3'),
                             AppText.get('prem_fam_ben_4'),
+                            AppText.get('prem_fam_ben_5'), // Сканер чеків
                           ],
                           buttonText: _getFamilyButtonText(currentTier),
                           isButtonDisabled: currentTier == SubTier.family,
@@ -168,6 +159,27 @@ class _PremiumScreenState extends State<PremiumScreen> {
                         ),
                         const SizedBox(height: 20),
                       ],
+                    ),
+                  ),
+
+                  // 2. А ТЕПЕР ЙДЕ ХРЕСТИК (тепер він лежить поверх усього екрану і точно клікнеться!)
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white70, size: 30),
+                        onPressed: () {
+                          if (Navigator.canPop(context)) {
+                            Navigator.pop(context, currentTier != SubTier.free);
+                          } else {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(builder: (context) => const HomeScreen()),
+                            );
+                          }
+                        },
+                      ),
                     ),
                   ),
                 ],

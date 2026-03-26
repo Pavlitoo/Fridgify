@@ -10,6 +10,36 @@ import '../global.dart';
 import '../utils/snackbar_utils.dart';
 
 class FridgeDialogs {
+  // --- ДОПОМІЖНА ЛОГІКА ДЛЯ ЗЛИТТЯ ПРОДУКТІВ ---
+  static bool _isSameProduct(String name1, String name2) {
+    String n1 = name1.toLowerCase().trim().replaceAll(RegExp(r'[^\w\sа-яА-ЯіІїЇєЄ]'), '');
+    String n2 = name2.toLowerCase().trim().replaceAll(RegExp(r'[^\w\sа-яА-ЯіІїЇєЄ]'), '');
+    if (n1.isEmpty || n2.isEmpty) return false;
+    return n1 == n2 || n1.contains(n2) || n2.contains(n1);
+  }
+
+  static String _getUnitType(String unit) {
+    if (unit == 'g' || unit == 'kg') return 'weight';
+    if (unit == 'ml' || unit == 'l') return 'volume';
+    return 'count';
+  }
+
+  static double _getBaseQty(double qty, String unit) {
+    if (unit == 'kg' || unit == 'l') return qty * 1000;
+    return qty;
+  }
+
+  static Map<String, dynamic> _formatQtyAndUnit(double baseQty, String type) {
+    if (type == 'weight') {
+      if (baseQty >= 1000) return {'qty': baseQty / 1000, 'unit': 'kg'};
+      return {'qty': baseQty, 'unit': 'g'};
+    }
+    if (type == 'volume') {
+      if (baseQty >= 1000) return {'qty': baseQty / 1000, 'unit': 'l'};
+      return {'qty': baseQty, 'unit': 'ml'};
+    }
+    return {'qty': baseQty, 'unit': 'pcs'};
+  }
 
   // ==========================================
   // ДІАЛОГ ДОДАВАННЯ / РЕДАГУВАННЯ ПРОДУКТУ
@@ -76,7 +106,6 @@ class FridgeDialogs {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 🔥 ПОЛЕ НАЗВИ З КНОПКОЮ ШТРИХКОДУ
                     TextField(
                         controller: nameController,
                         style: TextStyle(fontSize: 18, color: textColor),
@@ -84,26 +113,19 @@ class FridgeDialogs {
                             hintText: AppText.get('product_name'),
                             hintStyle: const TextStyle(color: Colors.grey),
                             prefixIcon: const Icon(Icons.edit, color: Colors.green),
-                            // 👇 КНОПКА СКАНЕРА ШТРИХКОДІВ 👇
                             suffixIcon: IconButton(
                               icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.blue),
                               tooltip: AppText.get('scan_barcode_tooltip'),
                               onPressed: () async {
                                 try {
-                                  // Відкриваємо камеру
                                   var result = await BarcodeScanner.scan();
                                   if (result.type == ResultType.Barcode && result.rawContent.isNotEmpty) {
-                                    // Показуємо лоадер, поки шукаємо в інтернеті
                                     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
-
-                                    // Шукаємо продукт у базі
                                     final productData = await BarcodeService.getProductByBarcode(result.rawContent);
-
                                     if (!context.mounted) return;
-                                    Navigator.pop(context); // Закриваємо лоадер
+                                    Navigator.pop(context);
 
                                     if (productData != null) {
-                                      // Оновлюємо UI (назву і категорію)
                                       setDialogState(() {
                                         nameController.text = productData['name'];
                                         selectedCategory = productData['category'];
@@ -194,15 +216,47 @@ class FridgeDialogs {
               TextButton(onPressed: () => Navigator.pop(context), child: Text(AppText.get('cancel'), style: TextStyle(fontSize: 16, color: textColor))),
               ElevatedButton(onPressed: () async {
                 if (nameController.text.isNotEmpty) {
-                  final qty = double.tryParse(qtyController.text) ?? 1.0;
-                  final data = {'name': nameController.text.trim(), 'expirationDate': Timestamp.fromDate(selectedDate), 'category': selectedCategory, 'quantity': qty, 'unit': selectedUnit};
+                  final qty = double.tryParse(qtyController.text.replaceAll(',', '.')) ?? 1.0;
+                  final newName = nameController.text.trim();
+
                   if (isEditing) {
+                    final data = {'name': newName, 'expirationDate': Timestamp.fromDate(selectedDate), 'category': selectedCategory, 'quantity': qty, 'unit': selectedUnit};
                     await collection.doc(productToEdit.id).update(data);
                     cancelNotification(productToEdit.id.hashCode);
                   } else {
-                    await collection.add({...data, 'addedDate': Timestamp.now()});
+                    // 🔥 ЛОГІКА ЗЛИТТЯ ПРОДУКТІВ
+                    final existingDocs = await collection.get();
+                    QueryDocumentSnapshot? matchDoc;
+
+                    for (var doc in existingDocs.docs) {
+                      final d = doc.data() as Map<String, dynamic>;
+                      if (d['category'] != 'trash' && _isSameProduct(d['name'], newName) && _getUnitType(d['unit']) == _getUnitType(selectedUnit)) {
+                        matchDoc = doc;
+                        break;
+                      }
+                    }
+
+                    if (matchDoc != null) {
+                      final matchData = matchDoc.data() as Map<String, dynamic>;
+                      final baseExt = _getBaseQty((matchData['quantity'] as num).toDouble(), matchData['unit']);
+                      final baseNew = _getBaseQty(qty, selectedUnit);
+                      final formatted = _formatQtyAndUnit(baseExt + baseNew, _getUnitType(selectedUnit));
+
+                      // Зберігаємо найсвіжішу дату придатності
+                      DateTime existingDate = (matchData['expirationDate'] as Timestamp).toDate();
+                      DateTime finalDate = selectedDate.isAfter(existingDate) ? selectedDate : existingDate;
+
+                      await collection.doc(matchDoc.id).update({
+                        'quantity': formatted['qty'],
+                        'unit': formatted['unit'],
+                        'expirationDate': Timestamp.fromDate(finalDate)
+                      });
+                    } else {
+                      final data = {'name': newName, 'expirationDate': Timestamp.fromDate(selectedDate), 'category': selectedCategory, 'quantity': qty, 'unit': selectedUnit, 'addedDate': Timestamp.now()};
+                      await collection.add(data);
+                    }
                   }
-                  Navigator.pop(context);
+                  if (context.mounted) Navigator.pop(context);
                 }
               }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: Text(isEditing ? AppText.get('save') : AppText.get('add'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))
             ],

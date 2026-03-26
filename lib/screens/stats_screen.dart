@@ -5,6 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../translations.dart';
 import '../error_handler.dart';
+import '../global.dart'; // 🔥 ДОДАЛИ ДЛЯ languageNotifier
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -25,21 +26,37 @@ class _StatsScreenState extends State<StatsScreen> {
     if (mounted) setState(() {});
   }
 
+  // 🔥 ВИПРАВЛЕНА ЛОГІКА ФІЛЬТРІВ (ОБНУЛЕННЯ ГОДИН)
   List<QueryDocumentSnapshot> _filterDocs(List<QueryDocumentSnapshot> docs) {
     if (_timeFilter == 'all') return docs;
 
     final now = DateTime.now();
-    // 🔥 Виправили: Місяць тепер завжди означає останні 30 днів
+    // Обнуляємо поточний час до 00:00:00, щоб фільтр рахував повні дні
+    final startOfToday = DateTime(now.year, now.month, now.day);
+
     final limitDate = _timeFilter == 'week'
-        ? now.subtract(const Duration(days: 7))
-        : now.subtract(const Duration(days: 30));
+        ? startOfToday.subtract(const Duration(days: 6)) // Останні 7 днів включаючи сьогодні
+        : startOfToday.subtract(const Duration(days: 29)); // Останні 30 днів
 
     return docs.where((doc) {
       final data = doc.data() as Map<String, dynamic>;
       if (data['date'] == null) return false;
       final date = (data['date'] as Timestamp).toDate();
-      return date.isAfter(limitDate);
+      // Порівнюємо, чи дата запису більша або дорівнює лімітній даті
+      return date.isAfter(limitDate) || date.isAtSameMomentAs(limitDate);
     }).toList();
+  }
+
+  // 🔥 ФУНКЦІЯ ДЛЯ МУЛЬТИМОВНОГО ФОРМАТУВАННЯ ДАТИ
+  String _formatDateMulti(DateTime date) {
+    String locale = 'en';
+    switch (languageNotifier.value) {
+      case 'Українська': locale = 'uk'; break;
+      case 'Español': locale = 'es'; break;
+      case 'Français': locale = 'fr'; break;
+      case 'Deutsch': locale = 'de'; break;
+    }
+    return DateFormat('dd MMM, HH:mm', locale).format(date);
   }
 
   @override
@@ -251,7 +268,9 @@ class _StatsScreenState extends State<StatsScreen> {
                     final data = filteredDocs[i].data() as Map<String, dynamic>;
                     bool isSaved = data['action'] == 'eaten';
                     final date = (data['date'] as Timestamp).toDate();
-                    final dateStr = DateFormat('dd MMM, HH:mm').format(date);
+
+                    // 🔥 Використовуємо мультимовне форматування
+                    final dateStr = _formatDateMulti(date);
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),

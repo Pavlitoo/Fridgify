@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../product_model.dart';
 import '../translations.dart';
 
@@ -90,7 +89,8 @@ class ProductListItem extends StatelessWidget {
               itemBuilder: (context) => [
                 PopupMenuItem(value: 'edit', child: Row(children: [const Icon(Icons.edit, color: Colors.blue), const SizedBox(width: 10), Text(AppText.get('edit_product'), style: TextStyle(color: textColor))])),
                 PopupMenuItem(value: 'eaten', child: Row(children: [const Icon(Icons.restaurant, color: Colors.green), const SizedBox(width: 10), Text(AppText.get('action_eaten'), style: TextStyle(color: textColor))])),
-                PopupMenuItem(value: 'shop', child: Row(children: [const Icon(Icons.shopping_cart, color: Colors.orange), const SizedBox(width: 10), Text(AppText.get('yes_list'), style: TextStyle(color: textColor))])),
+                // 🔥 ЗАМІНИЛИ ХАРДКОД НА ПЕРЕКЛАД
+                PopupMenuItem(value: 'shop', child: Row(children: [const Icon(Icons.shopping_cart, color: Colors.orange), const SizedBox(width: 10), Text(AppText.get('btn_buy'), style: TextStyle(color: textColor))])),
                 const PopupMenuDivider(),
                 PopupMenuItem(value: 'delete', child: Row(children: [const Icon(Icons.delete_outline, color: Colors.red), const SizedBox(width: 10), Text(AppText.get('no_delete'), style: TextStyle(color: textColor))])),
               ],

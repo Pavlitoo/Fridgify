@@ -22,7 +22,6 @@ class _SavedRecipesScreenState extends State<SavedRecipesScreen> {
   @override
   void initState() {
     super.initState();
-    // 🔥 ВИПРАВЛЕНО: Використовуємо hasProOrHigher
     if (!SubscriptionService().hasProOrHigher) {
       _loadBannerAd();
     }
@@ -88,9 +87,22 @@ class _SavedRecipesScreenState extends State<SavedRecipesScreen> {
                   itemBuilder: (context, index) {
                     final data = docs[index].data() as Map<String, dynamic>;
 
+                    // 🔥 ВИПРАВЛЕНО: Ми передаємо ВСІ інгредієнти у missingIngredients,
+                    // а recipe_detail_screen потім сам їх розсортує на основі актуального холодильника!
+                    List<String> allRecipeIngredients = [];
+                    allRecipeIngredients.addAll(List<String>.from(data['ingredients'] ?? []));
+                    allRecipeIngredients.addAll(List<String>.from(data['missingIngredients'] ?? []));
+
                     final recipe = Recipe(
-                      title: data['title'] ?? '', description: data['description'] ?? '', time: data['time'] ?? '', kcal: data['kcal'] ?? '', imageUrl: data['imageUrl'] ?? '', isVegetarian: data['isVegetarian'] ?? false,
-                      ingredients: List<String>.from(data['ingredients'] ?? []), steps: List<String>.from(data['steps'] ?? []), missingIngredients: [], // Перевірка тепер динамічна
+                      title: data['title'] ?? '',
+                      description: data['description'] ?? '',
+                      time: data['time'] ?? '',
+                      kcal: data['kcal'] ?? '',
+                      imageUrl: data['imageUrl'] ?? '',
+                      isVegetarian: data['isVegetarian'] ?? false,
+                      ingredients: [], // Ми залишаємо пустим, бо все передали в missing, щоб воно відсортувалося
+                      missingIngredients: allRecipeIngredients,
+                      steps: List<String>.from(data['steps'] ?? []),
                     );
 
                     final dietLabelKey = data['dietLabelKey'] ?? 'tag_standard';
@@ -114,7 +126,13 @@ class _SavedRecipesScreenState extends State<SavedRecipesScreen> {
                                   children: [
                                     Text(recipe.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
                                     const SizedBox(height: 6),
-                                    Row(children: [Icon(Icons.timer, size: 14, color: Colors.grey[600]), const SizedBox(width: 4), Text(recipe.time, style: TextStyle(fontSize: 12, color: Colors.grey[600])), const SizedBox(width: 12), Icon(Icons.local_fire_department, size: 14, color: Colors.orange), const SizedBox(width: 4), Text("${recipe.kcal} kcal", style: TextStyle(fontSize: 12, color: Colors.grey[600]))])
+                                    Row(children: [
+                                      Icon(Icons.timer, size: 14, color: Colors.grey[600]), const SizedBox(width: 4),
+                                      Text(recipe.time, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                                      const SizedBox(width: 12),
+                                      Icon(Icons.local_fire_department, size: 14, color: Colors.orange), const SizedBox(width: 4),
+                                      Text("${recipe.kcal} ${AppText.get('rec_kcal')}", style: TextStyle(fontSize: 12, color: Colors.grey[600]))
+                                    ])
                                   ],
                                 ),
                               ),
@@ -129,7 +147,6 @@ class _SavedRecipesScreenState extends State<SavedRecipesScreen> {
               },
             ),
           ),
-          // 🔥 ВИПРАВЛЕНО: Використовуємо hasProOrHigher
           if (_bannerAd != null && _isBannerLoaded && !SubscriptionService().hasProOrHigher)
             Container(alignment: Alignment.center, width: _bannerAd!.size.width.toDouble(), height: _bannerAd!.size.height.toDouble(), child: AdWidget(ad: _bannerAd!)),
         ],

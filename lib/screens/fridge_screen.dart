@@ -18,12 +18,10 @@ import '../error_handler.dart';
 import '../utils/snackbar_utils.dart';
 import 'recipe_detail_screen.dart';
 
-// 🔥 ПІДКЛЮЧАЄМО НАШІ НОВІ КОМПОНЕНТИ
 import 'fridge_dialogs.dart';
 import '../widgets/product_list_item.dart';
-import 'receipt_scanner.dart'; // <--- ДОДАНО ІМПОРТ НОВОГО СКАНЕРА ЧЕКІВ
+import 'receipt_scanner.dart';
 
-// --- МОДЕЛІ ---
 class CategoryData {
   final String id;
   final IconData icon;
@@ -43,7 +41,6 @@ final List<CategoryData> appCategories = [
   CategoryData('drink', Icons.local_drink, Colors.blue, 'cat_drink'),
 ];
 
-// --- ГОЛОВНИЙ ВІДЖЕТ ---
 class FridgeContent extends StatefulWidget {
   const FridgeContent({super.key});
 
@@ -61,6 +58,34 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
   String _selectedDiet = 'standard';
 
   StreamSubscription<QuerySnapshot>? _productSubscription;
+
+  // --- ДОПОМІЖНА ЛОГІКА ДЛЯ ЗЛИТТЯ ПРОДУКТІВ ---
+  bool _isSameProduct(String name1, String name2) {
+    String n1 = name1.toLowerCase().trim().replaceAll(RegExp(r'[^\w\sа-яА-ЯіІїЇєЄ]'), '');
+    String n2 = name2.toLowerCase().trim().replaceAll(RegExp(r'[^\w\sа-яА-ЯіІїЇєЄ]'), '');
+    if (n1.isEmpty || n2.isEmpty) return false;
+    return n1 == n2 || n1.contains(n2) || n2.contains(n1);
+  }
+  String _getUnitType(String unit) {
+    if (unit == 'g' || unit == 'kg') return 'weight';
+    if (unit == 'ml' || unit == 'l') return 'volume';
+    return 'count';
+  }
+  double _getBaseQty(double qty, String unit) {
+    if (unit == 'kg' || unit == 'l') return qty * 1000;
+    return qty;
+  }
+  Map<String, dynamic> _formatQtyAndUnit(double baseQty, String type) {
+    if (type == 'weight') {
+      if (baseQty >= 1000) return {'qty': baseQty / 1000, 'unit': 'kg'};
+      return {'qty': baseQty, 'unit': 'g'};
+    }
+    if (type == 'volume') {
+      if (baseQty >= 1000) return {'qty': baseQty / 1000, 'unit': 'l'};
+      return {'qty': baseQty, 'unit': 'ml'};
+    }
+    return {'qty': baseQty, 'unit': 'pcs'};
+  }
 
   @override
   void initState() {
@@ -90,10 +115,9 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
       final product = Product.fromFirestore(doc);
       if (product.category == 'trash') continue;
 
-      if (product.expirationDate.isAfter(now.subtract(const Duration(days: 1)))) {
-        await NotificationService.scheduleExpiryNotifications(productId: product.id, productName: product.name, expirationDate: product.expirationDate);
+      if (product.expirationDate.difference(now).inDays <= 0) {
+        urgentItems.add(product.name);
       }
-      if (product.expirationDate.difference(now).inDays <= 0) urgentItems.add(product.name);
     }
 
     if (urgentItems.isNotEmpty) {
@@ -151,9 +175,32 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
     NotificationService.cancelForProduct(product.id);
   }
 
+  // 🔥 ЗЛИТТЯ ПРИ ВІДНОВЛЕННІ ЗІ СМІТНИКА В СПИСОК ПОКУПОК
   Future<void> _moveFromTrashToShopList(Product product, CollectionReference fridgeCollection, CollectionReference listCollection) async {
     try {
-      await listCollection.add({'name': product.name, 'quantity': product.quantity, 'unit': product.unit, 'isBought': false, 'addedDate': Timestamp.now()});
+      final existingDocs = await listCollection.get();
+      QueryDocumentSnapshot? matchDoc;
+      for (var doc in existingDocs.docs) {
+        final d = doc.data() as Map<String, dynamic>;
+        if (_isSameProduct(d['name'], product.name) && _getUnitType(d['unit']) == _getUnitType(product.unit)) {
+          matchDoc = doc; break;
+        }
+      }
+
+      if (matchDoc != null) {
+        final matchData = matchDoc.data() as Map<String, dynamic>;
+        final baseExt = _getBaseQty((matchData['quantity'] as num).toDouble(), matchData['unit']);
+        final baseNew = _getBaseQty(product.quantity, product.unit);
+        final formatted = _formatQtyAndUnit(baseExt + baseNew, _getUnitType(product.unit));
+
+        await listCollection.doc(matchDoc.id).update({
+          'quantity': formatted['qty'],
+          'unit': formatted['unit']
+        });
+      } else {
+        await listCollection.add({'name': product.name, 'quantity': product.quantity, 'unit': product.unit, 'isBought': false, 'addedDate': Timestamp.now()});
+      }
+
       _deleteProductForever(product, fridgeCollection);
       if (mounted) { Navigator.pop(context); SnackbarUtils.showSuccess(context, "🛒 ${product.name} ${AppText.get('yes_list')}"); }
     } catch (e) { if (mounted) SnackbarUtils.showError(context, ErrorHandler.getMessage(e)); }
@@ -473,7 +520,6 @@ class _FridgeContentState extends State<FridgeContent> with TickerProviderStateM
             return Scaffold(
               backgroundColor: bgColor,
               appBar: AppBar(
-                // 🔥 НОВА КНОПКА СКАНЕРА ЧЕКІВ
                 leading: IconButton(
                     icon: const Icon(Icons.receipt_long, color: Colors.blue, size: 28),
                     tooltip: "Сканувати чек",

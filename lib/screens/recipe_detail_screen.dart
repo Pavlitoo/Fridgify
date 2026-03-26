@@ -1,5 +1,4 @@
 import 'dart:async';
-// 🔥 ВИДАЛЕНО: import 'dart:io'; (щоб прибрати попередження unused import)
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -36,16 +35,14 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
 
   List<String> _dynamicAvailableIngredients = [];
   List<String> _dynamicMissingIngredients = [];
+  bool _isCheckingFridge = true;
 
   @override
   void initState() {
     super.initState();
     _checkIfSaved();
+    _recalculateIngredients();
 
-    _dynamicAvailableIngredients = widget.recipe.ingredients;
-    _dynamicMissingIngredients = widget.recipe.missingIngredients;
-
-    // 🔥 ВИПРАВЛЕНО: Використовуємо hasProOrHigher
     if (!SubscriptionService().hasProOrHigher) _loadBannerAd();
   }
 
@@ -65,6 +62,69 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   void dispose() {
     _bannerAd?.dispose();
     super.dispose();
+  }
+
+  // 🔥 ГОЛОВНА МАГІЯ: Динамічне сортування інгредієнтів
+  Future<void> _recalculateIngredients() async {
+    if (user == null) return;
+    try {
+      // 1. Отримуємо всі інгредієнти, необхідні для цього рецепта
+      List<String> allNeeded = [];
+      allNeeded.addAll(widget.recipe.ingredients);
+      allNeeded.addAll(widget.recipe.missingIngredients);
+
+      // 2. Визначаємо, звідки брати продукти (особистий чи сімейний холодильник)
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
+      final String? householdId = userDoc.data()?['householdId'];
+
+      final fridgeRef = householdId != null && householdId.isNotEmpty
+          ? FirebaseFirestore.instance.collection('households').doc(householdId).collection('products')
+          : FirebaseFirestore.instance.collection('users').doc(user!.uid).collection('products');
+
+      // 3. Завантажуємо продукти (тільки свіжі)
+      final snapshot = await fridgeRef.where('category', isNotEqualTo: 'trash').get();
+      List<String> myFridgeItems = snapshot.docs.map((doc) => doc.data()['name'].toString().toLowerCase().trim()).toList();
+
+      List<String> available = [];
+      List<String> missing = [];
+
+      // 4. Сортуємо
+      for (String item in allNeeded) {
+        final parsed = _parseIngredient(item);
+        bool foundInFridge = false;
+
+        for (String fridgeItem in myFridgeItems) {
+          if (_isSameProduct(fridgeItem, parsed['name'])) {
+            foundInFridge = true;
+            break;
+          }
+        }
+
+        if (foundInFridge) {
+          available.add(item);
+        } else {
+          missing.add(item);
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _dynamicAvailableIngredients = available;
+          _dynamicMissingIngredients = missing;
+          _isCheckingFridge = false;
+        });
+      }
+
+    } catch (e) {
+      if (mounted) {
+        // Якщо помилка — просто показуємо як було
+        setState(() {
+          _dynamicAvailableIngredients = widget.recipe.ingredients;
+          _dynamicMissingIngredients = widget.recipe.missingIngredients;
+          _isCheckingFridge = false;
+        });
+      }
+    }
   }
 
   String _translateRawIngredient(String raw) {
@@ -136,7 +196,20 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       await collection.doc(docId).delete();
       if (mounted) { setState(() => _isSaved = false); SnackbarUtils.showWarning(context, AppText.get('msg_recipe_removed')); }
     } else {
-      final recipeMap = { 'title': widget.recipe.title, 'description': widget.recipe.description, 'time': widget.recipe.time, 'kcal': widget.recipe.kcal, 'imageUrl': widget.recipe.imageUrl, 'isVegetarian': widget.recipe.isVegetarian, 'ingredients': widget.recipe.ingredients, 'missingIngredients': widget.recipe.missingIngredients, 'steps': widget.recipe.steps, 'dietLabelKey': widget.dietLabelKey, 'savedAt': Timestamp.now() };
+      // При збереженні ми зберігаємо рецепт із актуальними даними (розподіленими заново)
+      final recipeMap = {
+        'title': widget.recipe.title,
+        'description': widget.recipe.description,
+        'time': widget.recipe.time,
+        'kcal': widget.recipe.kcal,
+        'imageUrl': widget.recipe.imageUrl,
+        'isVegetarian': widget.recipe.isVegetarian,
+        'ingredients': _dynamicAvailableIngredients,
+        'missingIngredients': _dynamicMissingIngredients,
+        'steps': widget.recipe.steps,
+        'dietLabelKey': widget.dietLabelKey,
+        'savedAt': Timestamp.now()
+      };
       await collection.doc(docId).set(recipeMap);
       if (mounted) { setState(() => _isSaved = true); SnackbarUtils.showSuccess(context, AppText.get('msg_recipe_saved')); }
     }
@@ -148,7 +221,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       String ingredientsTitle = AppText.get('rec_ingredients');
       String healthyTag = AppText.get('tag_healthy');
 
-      List<String> allShareIngs = [...widget.recipe.ingredients, ...widget.recipe.missingIngredients];
+      List<String> allShareIngs = [..._dynamicAvailableIngredients, ..._dynamicMissingIngredients];
       String ingredientsText = allShareIngs.map((e) => "• ${_translateRawIngredient(e)}").join('\n');
 
       String text = "🍳 ${widget.recipe.title}\n⏱ ${widget.recipe.time} | 🔥 ${widget.recipe.kcal} kcal\n";
@@ -246,7 +319,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       final msg = {
         'type': 'recipe', 'senderId': user!.uid, 'senderName': myName, 'timestamp': FieldValue.serverTimestamp(), 'readBy': [user!.uid],
         'recipeTitle': widget.recipe.title, 'recipeTime': widget.recipe.time, 'recipeKcal': widget.recipe.kcal, 'imageUrl': widget.recipe.imageUrl, 'description': widget.recipe.description,
-        'isVegetarian': widget.recipe.isVegetarian, 'ingredients': widget.recipe.ingredients, 'missingIngredients': widget.recipe.missingIngredients, 'steps': widget.recipe.steps, 'dietLabelKey': widget.dietLabelKey,
+        'isVegetarian': widget.recipe.isVegetarian, 'ingredients': _dynamicAvailableIngredients, 'missingIngredients': _dynamicMissingIngredients, 'steps': widget.recipe.steps, 'dietLabelKey': widget.dietLabelKey,
       };
 
       if (isDirect) {
@@ -337,7 +410,9 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: Column(
+      body: _isCheckingFridge
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
         children: [
           Expanded(
             child: CustomScrollView(
@@ -359,7 +434,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]), child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [_InfoItem(icon: Icons.timer, text: widget.recipe.time, color: Colors.blue), _InfoItem(icon: Icons.local_fire_department, text: "${widget.recipe.kcal} ${AppText.get('rec_kcal')}", color: Colors.orange), _InfoItem(icon: badgeIcon, text: AppText.get(widget.dietLabelKey), color: badgeColor)])),
+                        // 🔥 ВИПРАВЛЕНО БАГ З ПОДВІЙНИМ "ккал"
+                        Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]), child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [_InfoItem(icon: Icons.timer, text: widget.recipe.time, color: Colors.blue), _InfoItem(icon: Icons.local_fire_department, text: "${widget.recipe.kcal} ${AppText.get('rec_kcal')}".replaceAll('ккал ккал', 'ккал'), color: Colors.orange), _InfoItem(icon: badgeIcon, text: AppText.get(widget.dietLabelKey), color: badgeColor)])),
                         const SizedBox(height: 25),
                         Text(widget.recipe.description, style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic, color: Colors.grey.shade600)),
                         const SizedBox(height: 25),
@@ -397,21 +473,19 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                           ),
 
                         // ЗЕЛЕНИЙ БЛОК: Є У ХОЛОДИЛЬНИКУ
-                        Container(
-                          width: double.infinity, padding: const EdgeInsets.all(20), margin: const EdgeInsets.only(bottom: 25),
-                          decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))], border: Border(left: BorderSide(color: Colors.green.shade400, width: 6))),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(children: [Icon(Icons.kitchen, color: isDark ? Colors.green.shade300 : Colors.green.shade700), const SizedBox(width: 10), Text(AppText.get('ingredients_fridge'), style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.green.shade300 : Colors.green.shade800, fontSize: 18))]),
-                              const SizedBox(height: 16),
-                              if (_dynamicAvailableIngredients.isEmpty)
-                                Text(AppText.get('list_empty'), style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic))
-                              else
+                        if (_dynamicAvailableIngredients.isNotEmpty)
+                          Container(
+                            width: double.infinity, padding: const EdgeInsets.all(20), margin: const EdgeInsets.only(bottom: 25),
+                            decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))], border: Border(left: BorderSide(color: Colors.green.shade400, width: 6))),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(children: [Icon(Icons.kitchen, color: isDark ? Colors.green.shade300 : Colors.green.shade700), const SizedBox(width: 10), Text(AppText.get('ingredients_fridge'), style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.green.shade300 : Colors.green.shade800, fontSize: 18))]),
+                                const SizedBox(height: 16),
                                 Column(children: _dynamicAvailableIngredients.map((ing) => Padding(padding: const EdgeInsets.only(bottom: 12), child: Row(children: [Icon(Icons.check_circle, color: isDark ? Colors.green.shade400 : Colors.green.shade600, size: 22), const SizedBox(width: 12), Expanded(child: Text(_translateRawIngredient(ing), style: TextStyle(fontSize: 15, color: textColor, fontWeight: FontWeight.w500)))]))).toList()),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
 
                         const SizedBox(height: 10),
                         Text(AppText.get('instructions'), style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
@@ -427,7 +501,6 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
               ],
             ),
           ),
-          // 🔥 ВИПРАВЛЕНО: Використовуємо hasProOrHigher
           if (_bannerAd != null && _isBannerLoaded && !SubscriptionService().hasProOrHigher) Container(alignment: Alignment.center, width: _bannerAd!.size.width.toDouble(), height: _bannerAd!.size.height.toDouble(), child: AdWidget(ad: _bannerAd!)),
         ],
       ),

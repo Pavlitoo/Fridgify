@@ -78,7 +78,14 @@ class _ChatScreenState extends State<ChatScreen> {
   List<Map<String, dynamic>> _pinnedMessages = [];
   int _currentPinIndex = 0;
   StreamSubscription<DocumentSnapshot>? _chatDocSub;
+  StreamSubscription<DocumentSnapshot>? _typingSub; // 🔥 Окремий слухач для друку
   double? _uploadProgress;
+
+  // 🔥 ЗМІННІ ДЛЯ ІНДИКАТОРА ДРУКУ ("ПИШЕ...")
+  Timer? _typingTimer;
+  bool _isTyping = false;
+  List<String> _typingUserNames = [];
+  final Map<String, String> _userNameCache = {};
 
   @override
   void initState() {
@@ -90,12 +97,40 @@ class _ChatScreenState extends State<ChatScreen> {
     _audioPlayer.onDurationChanged.listen((d) { if(mounted) setState(() => _totalAudioDuration = d); });
     _audioPlayer.onPlayerComplete.listen((_) { if(mounted) setState(() { _playingMsgId = null; _currentAudioPosition = Duration.zero; }); });
 
-    _msgController.addListener(() { setState(() { _isTextEmpty = _msgController.text.trim().isEmpty; }); });
+    // 🔥 СЛУХАЄМО ВВІД ТЕКСТУ
+    _msgController.addListener(() {
+      bool textEmpty = _msgController.text.trim().isEmpty;
+      if (_isTextEmpty != textEmpty) {
+        setState(() { _isTextEmpty = textEmpty; });
+      }
+
+      if (!textEmpty) {
+        if (!_isTyping) {
+          _isTyping = true;
+          _chatService.setTypingStatus(widget.chatId, true, isDirect: widget.isDirect);
+        }
+        _typingTimer?.cancel();
+        _typingTimer = Timer(const Duration(seconds: 3), () {
+          if (_isTyping) {
+            _isTyping = false;
+            _chatService.setTypingStatus(widget.chatId, false, isDirect: widget.isDirect);
+          }
+        });
+      } else {
+        if (_isTyping) {
+          _typingTimer?.cancel();
+          _isTyping = false;
+          _chatService.setTypingStatus(widget.chatId, false, isDirect: widget.isDirect);
+        }
+      }
+    });
+
     _scrollController.addListener(() {
       if (_scrollController.offset > 300 && !_showScrollToBottom) setState(() => _showScrollToBottom = true);
       else if (_scrollController.offset <= 300 && _showScrollToBottom) setState(() => _showScrollToBottom = false);
     });
 
+    // 1. Слухаємо головний документ для закріплених повідомлень
     final docRef = widget.isDirect ? FirebaseFirestore.instance.collection('chats').doc(widget.chatId) : FirebaseFirestore.instance.collection('households').doc(widget.chatId);
     _chatDocSub = docRef.snapshots().listen((doc) {
       if (doc.exists && doc.data()!.containsKey('pinnedMessages')) {
@@ -111,12 +146,55 @@ class _ChatScreenState extends State<ChatScreen> {
         if(mounted) setState(() { _pinnedMessages = []; _currentPinIndex = 0; });
       }
     });
+
+    // 2. Слухаємо спеціальний документ TYPING_INDICATOR всередині messages
+    final typingRef = widget.isDirect
+        ? FirebaseFirestore.instance.collection('chats').doc(widget.chatId).collection('messages').doc('TYPING_INDICATOR')
+        : FirebaseFirestore.instance.collection('households').doc(widget.chatId).collection('messages').doc('TYPING_INDICATOR');
+
+    _typingSub = typingRef.snapshots().listen((doc) {
+      if (doc.exists && doc.data()!.containsKey('typing')) {
+        List<String> typingUids = List<String>.from(doc.data()!['typing'] ?? []);
+        typingUids.remove(user.uid);
+        _updateTypingUsers(typingUids);
+      } else {
+        if (mounted) setState(() => _typingUserNames = []);
+      }
+    });
+  }
+
+  // Отримуємо імена тих, хто зараз пише
+  Future<void> _updateTypingUsers(List<String> uids) async {
+    if (uids.isEmpty) {
+      if (mounted) setState(() => _typingUserNames = []);
+      return;
+    }
+    List<String> names = [];
+    for (String uid in uids) {
+      if (_userNameCache.containsKey(uid)) {
+        names.add(_userNameCache[uid]!);
+      } else {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+        if (doc.exists) {
+          String name = doc.data()?['displayName'] ?? AppText.get('notif_someone');
+          _userNameCache[uid] = name;
+          names.add(name);
+        } else {
+          names.add(AppText.get('notif_someone'));
+        }
+      }
+    }
+    if (mounted) setState(() => _typingUserNames = names);
   }
 
   @override
   void dispose() {
+    _typingTimer?.cancel();
+    if (_isTyping) _chatService.setTypingStatus(widget.chatId, false, isDirect: widget.isDirect);
+
     _recordTimer?.cancel();
     _chatDocSub?.cancel();
+    _typingSub?.cancel(); // Звільняємо слухача
     if (_isRecorderInitialized && _recorder != null) _recorder!.closeRecorder();
     _audioPlayer.dispose();
     _msgController.dispose();
@@ -246,6 +324,10 @@ class _ChatScreenState extends State<ChatScreen> {
     String text = _msgController.text.trim(); if (text.isEmpty) return;
     if (_editingMsgId != null) { _chatService.editMessage(widget.chatId, _editingMsgId!, text, isDirect: widget.isDirect); setState(() { _editingMsgId = null; }); }
     else { String? replyToName = _replyMessage?['sender']; _chatService.sendMessage(widget.chatId, text, isDirect: widget.isDirect, replyToText: _replyMessage?['text'], replyToSender: _replyMessage?['sender']); if (!isSilent) _notifyRecipients(text, replyToName: replyToName); else SnackbarUtils.showSuccess(context, "🔕 ${AppText.get('chat_silent_send')}"); setState(() => _replyMessage = null); }
+
+    _isTyping = false;
+    _chatService.setTypingStatus(widget.chatId, false, isDirect: widget.isDirect);
+
     _msgController.clear(); _scrollToBottom();
   }
 
@@ -319,13 +401,22 @@ class _ChatScreenState extends State<ChatScreen> {
       await _setAudioSessionForRecording(); if (_recorder == null) _recorder = FlutterSoundRecorder(); if (!_isRecorderInitialized) { await _recorder!.openRecorder(); _isRecorderInitialized = true; }
       Directory tempDir = await getTemporaryDirectory(); String path = '${tempDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.mp4'; await _recorder!.startRecorder(toFile: path, codec: Codec.aacMP4);
       setState(() { _isRecording = true; _recordedFilePath = path; _recordDuration = 0; });
+
+      _isTyping = true;
+      _chatService.setTypingStatus(widget.chatId, true, isDirect: widget.isDirect);
+
       _recordTimer?.cancel(); _recordTimer = Timer.periodic(const Duration(seconds: 1), (timer) { setState(() { _recordDuration++; }); });
     } catch (e) { if (mounted) SnackbarUtils.showError(context, AppText.get('msg_error')); }
   }
 
   Future<void> _stopRecording() async {
     if (!_isRecording) return; _recordTimer?.cancel(); try { await _recorder!.stopRecorder(); } catch (e) {}
-    setState(() => _isRecording = false); if (_recordDuration < 1) { _recordedFilePath = null; return; }
+    setState(() => _isRecording = false);
+
+    _isTyping = false;
+    _chatService.setTypingStatus(widget.chatId, false, isDirect: widget.isDirect);
+
+    if (_recordDuration < 1) { _recordedFilePath = null; return; }
     if (_recordedFilePath != null) { _startUploadProgress(); await _chatService.sendVoice(widget.chatId, _recordedFilePath!, isDirect: widget.isDirect); _notifyRecipients("🎤 ${AppText.get('chat_voice_msg')}"); setState(() => _isUploading = false); _scrollToBottom(); }
   }
 
@@ -341,7 +432,20 @@ class _ChatScreenState extends State<ChatScreen> {
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF101010) : const Color(0xFFE5DDD5),
       appBar: AppBar(
-        title: _isSearching ? TextField(autofocus: true, style: TextStyle(color: textColor), decoration: InputDecoration(hintText: AppText.get('chat_search'), hintStyle: TextStyle(color: textColor.withValues(alpha: 0.5)), border: InputBorder.none), onChanged: (val) => setState(() => _searchQuery = val)) : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(widget.chatTitle ?? AppText.get('chat_title'), style: TextStyle(fontSize: 18, color: textColor)), if (widget.isDirect) Text(AppText.get('chat_personal'), style: const TextStyle(fontSize: 12, color: Colors.grey))]),
+        title: _isSearching ? TextField(autofocus: true, style: TextStyle(color: textColor), decoration: InputDecoration(hintText: AppText.get('chat_search'), hintStyle: TextStyle(color: textColor.withValues(alpha: 0.5)), border: InputBorder.none), onChanged: (val) => setState(() => _searchQuery = val))
+            : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.chatTitle ?? AppText.get('chat_title'), style: TextStyle(fontSize: 18, color: textColor)),
+              // 🔥 ІНДИКАТОР "ПИШЕ..."
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: _typingUserNames.isNotEmpty
+                    ? Text("${_typingUserNames.join(', ')} ${AppText.get('chat_is_typing')}", key: const ValueKey('typing'), style: const TextStyle(fontSize: 12, color: Colors.green, fontStyle: FontStyle.italic))
+                    : (widget.isDirect ? Text(AppText.get('chat_personal'), key: const ValueKey('personal'), style: const TextStyle(fontSize: 12, color: Colors.grey)) : const Text("", key: ValueKey('empty'), style: TextStyle(fontSize: 12))),
+              ),
+            ]
+        ),
         backgroundColor: Theme.of(context).appBarTheme.backgroundColor, iconTheme: IconThemeData(color: textColor),
         actions: [
           IconButton(icon: Icon(_isSearching ? Icons.close : Icons.search), onPressed: () => setState(() { _isSearching = !_isSearching; _searchQuery = ""; })),
@@ -360,7 +464,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   stream: _chatService.getMessages(widget.chatId, isDirect: widget.isDirect),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                    var docs = snapshot.data!.docs;
+
+                    // 🔥 ВАЖЛИВО: Відфільтровуємо системний документ TYPING_INDICATOR зі списку!
+                    var docs = snapshot.data!.docs.where((doc) => doc.id != 'TYPING_INDICATOR').toList();
+
                     if (_showMediaOnly) docs = docs.where((doc) { final data = doc.data() as Map<String, dynamic>; return data['imageUrl'] != null || data['imageBase64'] != null || data['audioUrl'] != null || data['audioBase64'] != null || data['fileUrl'] != null; }).toList();
                     if (_isSearching && _searchQuery.isNotEmpty) docs = docs.where((doc) { final data = doc.data() as Map<String, dynamic>; final text = data['text']?.toString().toLowerCase() ?? ''; return text.contains(_searchQuery.toLowerCase()); }).toList();
                     if (docs.isEmpty) return Center(child: Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(16)), child: Text(_isSearching ? AppText.get('chat_nothing_found') : AppText.get('chat_no_messages'), style: const TextStyle(color: Colors.white))));
@@ -500,7 +607,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // 🔥 ОНОВЛЕНИЙ МЕТОД: Пуші тепер підтягують мову
+  // 🔥 ПУШІ
   Future<void> _notifyRecipients(String messageText, {String? replyToName}) async { try { final myDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get(); final myName = myDoc.data()?['displayName'] ?? AppText.get('notif_someone'); String notificationType = widget.isDirect ? 'private_chat' : 'family_chat'; String targetChatId = widget.chatId; String title = widget.isDirect ? myName : "${AppText.get('notif_family')}: $myName"; String body = messageText; if (replyToName != null) { body = "↪️ ${AppText.get('notif_reply_to')} $replyToName: $messageText"; } if (widget.isDirect) { String receiverId = ''; if (widget.chatId.contains('_')) { final parts = widget.chatId.split('_'); if (parts.length == 2) { if (parts[0] == user.uid) receiverId = parts[1]; else if (parts[1] == user.uid) receiverId = parts[0]; } } if (receiverId.isEmpty) { final chatDoc = await FirebaseFirestore.instance.collection('chats').doc(widget.chatId).get(); if (chatDoc.exists) { final participants = List<String>.from(chatDoc.data()?['participants'] ?? []); receiverId = participants.firstWhere((id) => id != user.uid, orElse: () => ''); } } if (receiverId.isNotEmpty) { final receiverDoc = await FirebaseFirestore.instance.collection('users').doc(receiverId).get(); final token = receiverDoc.data()?['fcmToken']; if (token != null) await _sendPushV1(token, title, body, notificationType, targetChatId); } } else { String? householdId = myDoc.data()?['householdId']; if (householdId != null) { final familyMembers = await FirebaseFirestore.instance.collection('users').where('householdId', isEqualTo: householdId).get(); for (var doc in familyMembers.docs) { if (doc.id == user.uid) continue; final token = doc.data()['fcmToken']; if (token != null) _sendPushV1(token, title, body, notificationType, targetChatId); } } } } catch (e) { debugPrint("❌ [PUSH] Error: $e"); } }
   Future<void> _sendPushV1(String token, String title, String body, String type, String chatId) async { try { final accountCredentials = auth.ServiceAccountCredentials.fromJson(googleServiceAccount); final scopes = ['https://www.googleapis.com/auth/firebase.messaging']; final client = await auth.clientViaServiceAccount(accountCredentials, scopes); await client.post(Uri.parse('https://fcm.googleapis.com/v1/projects/${googleServiceAccount['project_id']}/messages:send'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({ 'message': { 'token': token, 'notification': { 'title': title, 'body': body }, 'data': { 'type': type, 'chatId': chatId, 'click_action': 'FLUTTER_NOTIFICATION_CLICK' } } })); client.close(); } catch (e) { debugPrint("❌ [PUSH V1] Exception: $e"); } }
 }

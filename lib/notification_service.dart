@@ -174,15 +174,7 @@ class NotificationService {
     } catch (e) { debugPrint("Token error: $e"); }
   }
 
-  // ... (Решта коду локальних пушів залишається без змін)
-  static Future<void> scheduleExpiryNotifications({required String productId, required String productName, required DateTime expirationDate}) async {
-    final now = DateTime.now();
-    final DateTime warnDate = expirationDate.subtract(const Duration(days: 1));
-    final scheduledWarn = DateTime(warnDate.year, warnDate.month, warnDate.day, 9, 0, 0);
-    if (scheduledWarn.isAfter(now)) await _scheduleSingle(id: ('${productId}_warn').hashCode, title: 'Увага! Завтра зіпсується ⚠️', body: productName, date: scheduledWarn);
-    final scheduledUrgent = DateTime(expirationDate.year, expirationDate.month, expirationDate.day, 9, 0, 0);
-    if (scheduledUrgent.isAfter(now)) await _scheduleSingle(id: ('${productId}_urgent').hashCode, title: 'Терміново! Сьогодні псується 🚨', body: productName, date: scheduledUrgent);
-  }
+
 
   static Future<void> _scheduleSingle({required int id, required String title, required String body, required DateTime date}) async {
     try {

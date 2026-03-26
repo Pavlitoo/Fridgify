@@ -1,9 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart'; // 🔥 ДОДАЛИ ІМПОРТ
 import '../translations.dart';
 import '../global.dart';
 
 class FaqScreen extends StatelessWidget {
   const FaqScreen({super.key});
+
+  // 🔥 ФУНКЦІЯ ДЛЯ ВІДПРАВКИ ЛИСТА
+  Future<void> _launchEmail() async {
+    final Uri emailLaunchUri = Uri(
+      scheme: 'mailto',
+      path: 'pasalugovij@gmail.com',
+      query: 'subject=Fridgify Support', // Тема листа
+    );
+
+    try {
+      await launchUrl(emailLaunchUri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint("Не вдалося відкрити пошту: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,12 +45,12 @@ class FaqScreen extends StatelessWidget {
                 _FAQItem(
                     title: AppText.get('faq_q1'),
                     content: AppText.get('faq_a1'),
-                    icon: Icons.add_circle_outline, color: Colors.green, isDark: isDark
+                    icon: Icons.kitchen, color: Colors.green, isDark: isDark
                 ),
                 _FAQItem(
                     title: AppText.get('faq_q2'),
                     content: AppText.get('faq_a2'),
-                    icon: Icons.delete_outline, color: Colors.red, isDark: isDark
+                    icon: Icons.receipt_long, color: Colors.blue, isDark: isDark
                 ),
                 _FAQItem(
                     title: AppText.get('faq_q3'),
@@ -44,7 +60,7 @@ class FaqScreen extends StatelessWidget {
                 _FAQItem(
                     title: AppText.get('faq_q4'),
                     content: AppText.get('faq_a4'),
-                    icon: Icons.language, color: Colors.blue, isDark: isDark
+                    icon: Icons.timer_off_outlined, color: Colors.redAccent, isDark: isDark
                 ),
                 _FAQItem(
                     title: AppText.get('faq_q5'),
@@ -54,15 +70,57 @@ class FaqScreen extends StatelessWidget {
                 _FAQItem(
                     title: AppText.get('faq_q6'),
                     content: AppText.get('faq_a6'),
-                    icon: Icons.star, color: Colors.amber, isDark: isDark
+                    icon: Icons.family_restroom, color: Colors.amber.shade700, isDark: isDark
                 ),
                 _FAQItem(
                     title: AppText.get('faq_q7'),
                     content: AppText.get('faq_a7'),
-                    icon: Icons.support_agent, color: Colors.purple, isDark: isDark
+                    icon: Icons.share, color: Colors.purple, isDark: isDark
+                ),
+                _FAQItem(
+                    title: AppText.get('faq_q8'),
+                    content: AppText.get('faq_a8'),
+                    icon: Icons.bar_chart, color: Colors.blueAccent, isDark: isDark
+                ),
+                _FAQItem(
+                    title: AppText.get('faq_q9'),
+                    content: AppText.get('faq_a9'),
+                    icon: Icons.chat_bubble_outline, color: Colors.indigo, isDark: isDark
+                ),
+                _FAQItem(
+                    title: AppText.get('faq_q10'),
+                    content: AppText.get('faq_a10'),
+                    icon: Icons.qr_code_scanner, color: Colors.brown, isDark: isDark
+                ),
+                _FAQItem(
+                    title: AppText.get('faq_q11'),
+                    content: AppText.get('faq_a11'),
+                    icon: Icons.language, color: Colors.lightBlue, isDark: isDark
+                ),
+                _FAQItem(
+                    title: AppText.get('faq_q12'),
+                    content: AppText.get('faq_a12'),
+                    icon: Icons.cancel_outlined, color: Colors.grey, isDark: isDark
                 ),
 
                 const SizedBox(height: 30),
+
+                // 🔥 КНОПКА ТЕХНІЧНОЇ ПІДТРИМКИ
+                Center(
+                  child: ElevatedButton.icon(
+                    onPressed: _launchEmail,
+                    icon: const Icon(Icons.email_outlined, color: Colors.white),
+                    label: Text(AppText.get('faq_support_btn'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      elevation: 3,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
                 Center(
                   child: Text("Version 1.0.0", style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
                 )

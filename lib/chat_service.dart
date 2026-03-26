@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart'; // 🔥 ДОДАЛИ STORAGE
+import 'package:firebase_storage/firebase_storage.dart';
 
 class ChatService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance; // Ініціалізація Storage
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
   // --- ГЕНЕРАЦІЯ ID ДЛЯ ПРИВАТНОГО ЧАТУ ---
   String getDmChatId(String userId1, String userId2) {
@@ -75,13 +75,33 @@ class ChatService {
     if (needCommit) await batch.commit();
   }
 
+  // 🔥 НОВЕ: СТАТУС "ПИШЕ ПОВІДОМЛЕННЯ..." (ОБХІД ПРАВИЛ FIREBASE)
+  Future<void> setTypingStatus(String chatId, bool isTyping, {bool isDirect = false}) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+
+    // Пишемо у спеціальний документ в підколекції messages (там точно є права на запис для всіх учасників)
+    final docRef = isDirect
+        ? _firestore.collection('chats').doc(chatId).collection('messages').doc('TYPING_INDICATOR')
+        : _firestore.collection('households').doc(chatId).collection('messages').doc('TYPING_INDICATOR');
+
+    try {
+      if (isTyping) {
+        await docRef.set({'typing': FieldValue.arrayUnion([uid])}, SetOptions(merge: true));
+      } else {
+        await docRef.set({'typing': FieldValue.arrayRemove([uid])}, SetOptions(merge: true));
+      }
+    } catch (e) {
+      print("Помилка оновлення статусу друку: $e");
+    }
+  }
+
   // --- АВАТАРКА ЮЗЕРА ---
   Future<String?> _getCurrentUserAvatar() async {
     try {
       final uid = _auth.currentUser?.uid;
       if (uid == null) return null;
       final doc = await _firestore.collection('users').doc(uid).get();
-      // Залишаємо base64 для аватарки користувача (якщо вона так збережена в профілі)
       return doc.data()?['avatar_base64'];
     } catch (e) {
       return null;
@@ -160,12 +180,9 @@ class ChatService {
         : _firestore.collection('households').doc(chatId).collection('messages').doc(msgId);
 
     try {
-      // 1. Отримуємо дані повідомлення перед видаленням
       final docSnap = await docRef.get();
       if (docSnap.exists) {
         final data = docSnap.data() as Map<String, dynamic>;
-
-        // 2. Якщо є посилання на файл — видаляємо його зі Storage
         final imageUrl = data['imageUrl'];
         final audioUrl = data['audioUrl'];
         final fileUrl = data['fileUrl'];
@@ -174,8 +191,6 @@ class ChatService {
         if (audioUrl != null) await _storage.refFromURL(audioUrl).delete();
         if (fileUrl != null) await _storage.refFromURL(fileUrl).delete();
       }
-
-      // 3. Видаляємо сам документ з Firestore
       await docRef.delete();
     } catch (e) {
       print("Помилка при видаленні повідомлення: $e");
@@ -188,17 +203,15 @@ class ChatService {
       final user = _auth.currentUser!;
       final avatar = await _getCurrentUserAvatar();
 
-      // 1. Завантажуємо в Storage і отримуємо лінк
       final imageUrl = await _uploadFileToStorage(imageFile, 'chat_images');
       if (imageUrl == null) throw Exception("Не вдалося завантажити фото");
 
-      // 2. Зберігаємо ЛІНК у Firestore
       final ref = isDirect
           ? _firestore.collection('chats').doc(chatId).collection('messages')
           : _firestore.collection('households').doc(chatId).collection('messages');
 
       await ref.add({
-        'imageUrl': imageUrl, // Замість imageBase64
+        'imageUrl': imageUrl,
         'senderId': user.uid,
         'senderName': user.displayName ?? 'User',
         'senderAvatar': avatar,
@@ -218,17 +231,15 @@ class ChatService {
       final avatar = await _getCurrentUserAvatar();
       File audioFile = File(path);
 
-      // 1. Завантажуємо аудіо в Storage
       final audioUrl = await _uploadFileToStorage(audioFile, 'chat_audio');
       if (audioUrl == null) throw Exception("Не вдалося завантажити голосове повідомлення");
 
-      // 2. Зберігаємо ЛІНК у Firestore
       final ref = isDirect
           ? _firestore.collection('chats').doc(chatId).collection('messages')
           : _firestore.collection('households').doc(chatId).collection('messages');
 
       await ref.add({
-        'audioUrl': audioUrl, // Замість audioBase64
+        'audioUrl': audioUrl,
         'senderId': user.uid,
         'senderName': user.displayName ?? 'User',
         'senderAvatar': avatar,
@@ -241,24 +252,22 @@ class ChatService {
     }
   }
 
-  // 🔥 НОВЕ: ВІДПРАВКА БУДЬ-ЯКОГО ФАЙЛУ ЧЕРЕЗ STORAGE (PDF, Word тощо)
+  // 🔥 ВІДПРАВКА БУДЬ-ЯКОГО ФАЙЛУ ЧЕРЕЗ STORAGE
   Future<void> sendFile(String chatId, File file, String fileName, {bool isDirect = false}) async {
     try {
       final user = _auth.currentUser!;
       final avatar = await _getCurrentUserAvatar();
 
-      // 1. Завантажуємо файл у Storage
       final fileUrl = await _uploadFileToStorage(file, 'chat_files');
       if (fileUrl == null) throw Exception("Не вдалося завантажити файл");
 
-      // 2. Зберігаємо ЛІНК та назву файлу у Firestore
       final ref = isDirect
           ? _firestore.collection('chats').doc(chatId).collection('messages')
           : _firestore.collection('households').doc(chatId).collection('messages');
 
       await ref.add({
         'fileUrl': fileUrl,
-        'fileName': fileName, // Щоб користувач бачив назву "document.pdf"
+        'fileName': fileName,
         'senderId': user.uid,
         'senderName': user.displayName ?? 'User',
         'senderAvatar': avatar,
