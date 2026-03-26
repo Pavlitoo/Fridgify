@@ -8,8 +8,6 @@ import '../chat_service.dart';
 import '../global.dart';
 import '../utils/snackbar_utils.dart';
 import '../error_handler.dart';
-
-// 🔥 ДОДАНО ІМПОРТИ
 import '../subscription_service.dart';
 import '../premium_screen.dart';
 import '/chat_screen.dart';
@@ -88,13 +86,10 @@ class _FamilyScreenState extends State<FamilyScreen> {
     }
   }
 
-  // 🔥 НОВА РОЗУМНА ФУНКЦІЯ СТВОРЕННЯ СІМ'Ї
   void _handleCreateFamilyPress() {
     if (SubscriptionService().hasFamily) {
-      // Якщо є Family Max - створюємо!
       _createFamily();
     } else {
-      // Якщо немає - перекидаємо на Paywall
       Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen()));
     }
   }
@@ -124,7 +119,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
       if (mounted) {
         Navigator.pop(context);
         await _loadFamilyData();
-        SnackbarUtils.showSuccess(context, "Сім'ю створено! 🏠");
+        SnackbarUtils.showSuccess(context, AppText.get('fam_created')); // 🔥
       }
     } catch (e) {
       if (mounted) {
@@ -169,20 +164,25 @@ class _FamilyScreenState extends State<FamilyScreen> {
 
                     final query = await FirebaseFirestore.instance.collection('households').where('inviteCode', isEqualTo: code).limit(1).get();
 
-                    if (query.docs.isEmpty) throw "Сім'ю з таким кодом не знайдено";
+                    if (query.docs.isEmpty) throw AppText.get('fam_not_found'); // 🔥
 
                     final houseDoc = query.docs.first;
                     final members = List<String>.from(houseDoc.data()['members'] ?? []);
                     final requests = List<String>.from(houseDoc.data()['requests'] ?? []);
 
-                    if (members.contains(user.uid)) throw "Ви вже у цій сім'ї";
-                    if (requests.contains(user.uid)) throw "Ви вже подали запит";
+                    if (members.contains(user.uid)) throw AppText.get('fam_already_in'); // 🔥
+                    if (requests.contains(user.uid)) throw AppText.get('fam_req_already_sent'); // 🔥
 
                     await houseDoc.reference.update({'requests': FieldValue.arrayUnion([user.uid])});
 
                     if (mounted) SnackbarUtils.showSuccess(context, AppText.get('req_sent'));
                   } catch (e) {
-                    if (mounted) SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
+                    // Якщо помилка це звичайний String (наші thrown messages), показуємо його
+                    if (e is String) {
+                      if (mounted) SnackbarUtils.showError(context, e);
+                    } else {
+                      if (mounted) SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
+                    }
                   }
                 },
                 child: Text(AppText.get('fam_join'))
@@ -208,8 +208,8 @@ class _FamilyScreenState extends State<FamilyScreen> {
       await batch.commit();
 
       if (mounted) {
-        if (accept) SnackbarUtils.showSuccess(context, "Користувача додано! 🎉");
-        else SnackbarUtils.showWarning(context, "Запит відхилено");
+        if (accept) SnackbarUtils.showSuccess(context, AppText.get('fam_user_added')); // 🔥
+        else SnackbarUtils.showWarning(context, AppText.get('fam_req_declined')); // 🔥
       }
     } catch (e) {
       if (mounted) SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
@@ -222,7 +222,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
     bool? confirm = await showDialog(context: context, builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text("${AppText.get('fam_leave')}?"),
-        content: const Text("Ви впевнені, що хочете вийти?"),
+        content: Text(AppText.get('fam_leave_confirm')), // 🔥
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppText.get('cancel'))),
           ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), onPressed: () => Navigator.pop(ctx, true), child: Text(AppText.get('fam_leave'))),
@@ -241,7 +241,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
         await batch.commit();
 
         await _loadFamilyData();
-        if(mounted) SnackbarUtils.showSuccess(context, "Ви покинули сім'ю 👋");
+        if(mounted) SnackbarUtils.showSuccess(context, AppText.get('fam_left_success')); // 🔥
       } catch (e) {
         if(mounted) SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
       } finally {
@@ -270,7 +270,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
         batch.update(houseRef, { 'members': FieldValue.arrayRemove([uid]) });
         batch.update(targetUserRef, { 'householdId': FieldValue.delete() });
         await batch.commit();
-        if(mounted) SnackbarUtils.showSuccess(context, "Учасника видалено");
+        if(mounted) SnackbarUtils.showSuccess(context, AppText.get('fam_member_removed')); // 🔥
       } catch (e) {
         if(mounted) SnackbarUtils.showError(context, ErrorHandler.getMessage(e));
       }
@@ -288,6 +288,21 @@ class _FamilyScreenState extends State<FamilyScreen> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: dmChatId, isDirect: true, chatTitle: memberName)));
   }
 
+  Widget _buildBadge(int count) {
+    if (count <= 0) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: const BoxDecoration(
+        color: Colors.red,
+        shape: BoxShape.circle,
+      ),
+      child: Text(
+        count > 99 ? '99+' : count.toString(),
+        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<String>(
@@ -300,7 +315,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
         final cardColor = Theme.of(context).cardColor;
         final codeBgColor = isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF1F8E9);
 
-        // 🔥 ПЕРЕВІРКА ПРЕМІУМУ ДЛЯ ДИЗАЙНУ КНОПКИ
         final hasFamilyTier = SubscriptionService().hasFamily;
 
         if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -321,7 +335,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   Text(AppText.get('fam_welcome_desc'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, color: Colors.grey)),
                   const SizedBox(height: 50),
 
-                  // 🔥 ЗОЛОТА КНОПКА З КОРОНОЮ ЯКЩО НЕМАЄ FAMILY MAX
                   SizedBox(
                       width: double.infinity, height: 55,
                       child: ElevatedButton.icon(
@@ -337,7 +350,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
 
                   const SizedBox(height: 20),
 
-                  // Кнопка приєднання (Завжди безкоштовна)
                   SizedBox(width: double.infinity, height: 55, child: OutlinedButton.icon(onPressed: _joinFamily, icon: const Icon(Icons.link, color: Colors.green), label: Text(AppText.get('fam_join'), style: const TextStyle(fontSize: 18, color: Colors.green)), style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.green, width: 2), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))))),
                 ],
               ),
@@ -372,105 +384,200 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 builder: (ctx, membersSnap) {
                   if (!membersSnap.hasData) return const Center(child: CircularProgressIndicator());
 
-                  final membersList = membersSnap.data!.docs.map((d) {
-                    final data = d.data() as Map<String, dynamic>;
-                    String name = data['displayName'] ?? 'User';
-                    if (d.id == user.uid && user.displayName != null && user.displayName!.isNotEmpty) name = user.displayName!;
-                    return {'uid': d.id, 'name': name};
-                  }).toList();
+                  return StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance.collection('chats').where('participants', arrayContains: user.uid).snapshots(),
+                      builder: (context, chatsSnap) {
 
-                  membersList.sort((a, b) => (a['uid'] == adminId) ? -1 : 1);
+                        Map<String, Timestamp> lastMessageTimes = {};
+                        if (chatsSnap.hasData) {
+                          for (var doc in chatsSnap.data!.docs) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            final participants = List<String>.from(data['participants'] ?? []);
+                            participants.remove(user.uid);
+                            if (participants.isNotEmpty) {
+                              final otherUserId = participants.first;
+                              final timestamp = data['lastTimestamp'] ?? data['lastMessageTime'];
+                              if (timestamp != null) {
+                                lastMessageTimes[otherUserId] = timestamp as Timestamp;
+                              }
+                            }
+                          }
+                        }
 
-                  return SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (_isAdmin && requests.isNotEmpty) ...[
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.1) : Colors.orange.shade50, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.orange.shade200)),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(children: [const Icon(Icons.notifications_active, color: Colors.deepOrange), const SizedBox(width: 10), Text(AppText.get('fam_requests'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.deepOrange))]),
-                                const SizedBox(height: 10),
-                                ...requests.map((uid) => FutureBuilder<DocumentSnapshot>(
-                                  future: FirebaseFirestore.instance.collection('users').doc(uid.toString()).get(),
-                                  builder: (context, snap) {
-                                    String name = "Unknown";
-                                    if (snap.hasData && snap.data!.exists) {
-                                      final uData = snap.data!.data() as Map<String, dynamic>?;
-                                      name = uData?['displayName'] ?? "User";
-                                    }
-                                    return Card(
-                                      color: cardColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), margin: const EdgeInsets.only(bottom: 8),
-                                      child: ListTile(
-                                        leading: SmartAvatar(userId: uid.toString(), radius: 20),
-                                        title: Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)), subtitle: Text(AppText.get('fam_wants_join'), style: const TextStyle(fontSize: 12)),
-                                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: const Icon(Icons.check_circle, color: Colors.green), onPressed: () => _handleRequest(_householdId!, uid.toString(), true)), IconButton(icon: const Icon(Icons.cancel, color: Colors.red), onPressed: () => _handleRequest(_householdId!, uid.toString(), false))]),
+                        final membersList = membersSnap.data!.docs.map((d) {
+                          final data = d.data() as Map<String, dynamic>;
+                          String name = data['displayName'] ?? 'User';
+                          if (d.id == user.uid && user.displayName != null && user.displayName!.isNotEmpty) name = user.displayName!;
+
+                          Timestamp? lastTime = lastMessageTimes[d.id];
+
+                          return {
+                            'uid': d.id,
+                            'name': name,
+                            'lastTime': lastTime,
+                          };
+                        }).toList();
+
+                        // Сортування: Адмін -> Ті, хто щойно писав -> Інші
+                        membersList.sort((a, b) {
+                          if (a['uid'] == adminId) return -1;
+                          if (b['uid'] == adminId) return 1;
+
+                          Timestamp? timeA = a['lastTime'] as Timestamp?;
+                          Timestamp? timeB = b['lastTime'] as Timestamp?;
+
+                          if (timeA != null && timeB != null) {
+                            return timeB.compareTo(timeA);
+                          } else if (timeA != null) {
+                            return -1;
+                          } else if (timeB != null) {
+                            return 1;
+                          }
+                          return 0;
+                        });
+
+                        return SingleChildScrollView(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (_isAdmin && requests.isNotEmpty) ...[
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.1) : Colors.orange.shade50, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.orange.shade200)),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(children: [const Icon(Icons.notifications_active, color: Colors.deepOrange), const SizedBox(width: 10), Text(AppText.get('fam_requests'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.deepOrange))]),
+                                      const SizedBox(height: 10),
+                                      ...requests.map((uid) => FutureBuilder<DocumentSnapshot>(
+                                        future: FirebaseFirestore.instance.collection('users').doc(uid.toString()).get(),
+                                        builder: (context, snap) {
+                                          String name = "Unknown";
+                                          if (snap.hasData && snap.data!.exists) {
+                                            final uData = snap.data!.data() as Map<String, dynamic>?;
+                                            name = uData?['displayName'] ?? "User";
+                                          }
+                                          return Card(
+                                            color: cardColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), margin: const EdgeInsets.only(bottom: 8),
+                                            child: ListTile(
+                                              leading: SmartAvatar(userId: uid.toString(), radius: 20),
+                                              title: Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)), subtitle: Text(AppText.get('fam_wants_join'), style: const TextStyle(fontSize: 12)),
+                                              trailing: Row(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: const Icon(Icons.check_circle, color: Colors.green), onPressed: () => _handleRequest(_householdId!, uid.toString(), true)), IconButton(icon: const Icon(Icons.cancel, color: Colors.red), onPressed: () => _handleRequest(_householdId!, uid.toString(), false))]),
+                                            ),
+                                          );
+                                        },
+                                      )),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                              ],
+
+                              // СІМЕЙНИЙ ЧАТ
+                              StreamBuilder<int>(
+                                  stream: _chatService.getUnreadCountForChatStream(_householdId!, isDirect: false),
+                                  builder: (context, unreadSnap) {
+                                    int unreadCount = unreadSnap.data ?? 0;
+                                    return SizedBox(
+                                      width: double.infinity, height: 60,
+                                      child: ElevatedButton(
+                                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: _householdId!, chatTitle: AppText.get('chat_title')))),
+                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              const Icon(Icons.chat_bubble, color: Colors.white),
+                                              const SizedBox(width: 10),
+                                              Text(AppText.get('chat_title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                                              if (unreadCount > 0) ...[
+                                                const SizedBox(width: 10),
+                                                _buildBadge(unreadCount),
+                                              ]
+                                            ],
+                                          )
                                       ),
                                     );
-                                  },
-                                )),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                        ],
-
-                        SizedBox(
-                          width: double.infinity, height: 60,
-                          child: ElevatedButton.icon(
-                            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: _householdId!, chatTitle: AppText.get('chat_title')))),
-                            icon: const Icon(Icons.chat_bubble, color: Colors.white), label: Text(AppText.get('chat_title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-                          ),
-                        ),
-                        const SizedBox(height: 30),
-
-                        Container(
-                          width: double.infinity, padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
-                          child: Column(children: [
-                            Text(AppText.get('fam_code'), style: const TextStyle(color: Colors.grey)), const SizedBox(height: 10),
-                            GestureDetector(
-                              onTap: () => _copyCode(inviteCode),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
-                                decoration: BoxDecoration(color: codeBgColor, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.green.withOpacity(0.3))),
-                                child: Row(mainAxisSize: MainAxisSize.min, children: [Text(inviteCode, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.green, letterSpacing: 2)), const SizedBox(width: 10), const Icon(Icons.copy, color: Colors.green)]),
+                                  }
                               ),
-                            ),
-                            const SizedBox(height: 8), Text(AppText.get('fam_copy'), style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                          ]),
-                        ),
+                              const SizedBox(height: 30),
 
-                        const SizedBox(height: 30),
-                        Text("${AppText.get('fam_members')} (${membersList.length})", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
-                        const SizedBox(height: 15),
+                              Container(
+                                width: double.infinity, padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
+                                child: Column(children: [
+                                  Text(AppText.get('fam_code'), style: const TextStyle(color: Colors.grey)), const SizedBox(height: 10),
+                                  GestureDetector(
+                                    onTap: () => _copyCode(inviteCode),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
+                                      decoration: BoxDecoration(color: codeBgColor, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.green.withOpacity(0.3))),
+                                      child: Row(mainAxisSize: MainAxisSize.min, children: [Text(inviteCode, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.green, letterSpacing: 2)), const SizedBox(width: 10), const Icon(Icons.copy, color: Colors.green)]),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8), Text(AppText.get('fam_copy'), style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                ]),
+                              ),
 
-                        ...membersList.map((m) {
-                          String uid = m['uid'] ?? '';
-                          String name = m['name'] ?? '';
+                              const SizedBox(height: 30),
+                              Text("${AppText.get('fam_members')} (${membersList.length})", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+                              const SizedBox(height: 15),
 
-                          bool isMe = uid == user.uid;
-                          bool isMemberAdmin = uid == adminId;
+                              ...membersList.map((m) {
+                                String uid = m['uid'] as String;
+                                String name = m['name'] as String;
 
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(16), border: isMemberAdmin ? Border.all(color: Colors.amber.withOpacity(0.5), width: 1.5) : null, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 5)]),
-                            child: ListTile(
-                              leading: SmartAvatar(userId: uid, radius: 24),
-                              title: Row(children: [Flexible(child: Text(name, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, color: textColor))), if (isMe) Container(margin: const EdgeInsets.only(left: 8), padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.green.withOpacity(0.2), borderRadius: BorderRadius.circular(6)), child: Text(AppText.get('fam_you_tag'), style: TextStyle(fontSize: 10, color: Colors.green.shade800, fontWeight: FontWeight.bold)))]),
-                              subtitle: Text(isMemberAdmin ? AppText.get('fam_admin') : AppText.get('fam_member'), style: TextStyle(color: isMemberAdmin ? Colors.orange : Colors.grey, fontSize: 12, fontWeight: isMemberAdmin ? FontWeight.bold : FontWeight.normal)),
-                              trailing: Row(mainAxisSize: MainAxisSize.min, children: [if (!isMe) IconButton(icon: CircleAvatar(radius: 18, backgroundColor: Colors.blue.withOpacity(0.1), child: const Icon(Icons.message, size: 18, color: Colors.blue)), onPressed: () => _openDm(uid, name)), if (_isAdmin && !isMe) IconButton(icon: CircleAvatar(radius: 18, backgroundColor: Colors.red.withOpacity(0.1), child: const Icon(Icons.delete, size: 18, color: Colors.red)), onPressed: () => _removeMember(_householdId!, uid, name))]),
-                            ),
-                          );
-                        }),
-                        const SizedBox(height: 50),
-                      ],
-                    ),
+                                bool isMe = uid == user.uid;
+                                bool isMemberAdmin = uid == adminId;
+                                String dmChatId = _chatService.getDmChatId(user.uid, uid);
+
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 10),
+                                  decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(16), border: isMemberAdmin ? Border.all(color: Colors.amber.withOpacity(0.5), width: 1.5) : null, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 5)]),
+                                  child: ListTile(
+                                    leading: SmartAvatar(userId: uid, radius: 24),
+                                    title: Row(children: [Flexible(child: Text(name, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, color: textColor))), if (isMe) Container(margin: const EdgeInsets.only(left: 8), padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.green.withOpacity(0.2), borderRadius: BorderRadius.circular(6)), child: Text(AppText.get('fam_you_tag'), style: TextStyle(fontSize: 10, color: Colors.green.shade800, fontWeight: FontWeight.bold)))]),
+                                    subtitle: Text(isMemberAdmin ? AppText.get('fam_admin') : AppText.get('fam_member'), style: TextStyle(color: isMemberAdmin ? Colors.orange : Colors.grey, fontSize: 12, fontWeight: isMemberAdmin ? FontWeight.bold : FontWeight.normal)),
+                                    trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (!isMe)
+                                            StreamBuilder<int>(
+                                                stream: _chatService.getUnreadCountForChatStream(dmChatId, isDirect: true),
+                                                builder: (context, unreadSnap) {
+                                                  int unreadCount = unreadSnap.data ?? 0;
+                                                  return Stack(
+                                                    clipBehavior: Clip.none,
+                                                    children: [
+                                                      IconButton(
+                                                          icon: CircleAvatar(radius: 18, backgroundColor: Colors.blue.withOpacity(0.1), child: const Icon(Icons.message, size: 18, color: Colors.blue)),
+                                                          onPressed: () => _openDm(uid, name)
+                                                      ),
+                                                      if (unreadCount > 0)
+                                                        Positioned(
+                                                          top: 0,
+                                                          right: 0,
+                                                          child: _buildBadge(unreadCount),
+                                                        )
+                                                    ],
+                                                  );
+                                                }
+                                            ),
+                                          if (_isAdmin && !isMe)
+                                            IconButton(
+                                                icon: CircleAvatar(radius: 18, backgroundColor: Colors.red.withOpacity(0.1), child: const Icon(Icons.delete, size: 18, color: Colors.red)),
+                                                onPressed: () => _removeMember(_householdId!, uid, name)
+                                            )
+                                        ]
+                                    ),
+                                  ),
+                                );
+                              }),
+                              const SizedBox(height: 50),
+                            ],
+                          ),
+                        );
+                      }
                   );
                 },
               );

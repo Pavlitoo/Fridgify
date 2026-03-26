@@ -1,15 +1,52 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import '../translations.dart';
 import '../utils/snackbar_utils.dart';
 import '../subscription_service.dart';
+import '../premium_screen.dart';
 
 class ReceiptScanner {
+
+  // --- ДОПОМІЖНА ЛОГІКА ДЛЯ ЗЛИТТЯ ПРОДУКТІВ ---
+  static bool _isSameProduct(String name1, String name2) {
+    String n1 = name1.toLowerCase().trim().replaceAll(RegExp(r'[^\w\sа-яА-ЯіІїЇєЄ]'), '');
+    String n2 = name2.toLowerCase().trim().replaceAll(RegExp(r'[^\w\sа-яА-ЯіІїЇєЄ]'), '');
+    if (n1.isEmpty || n2.isEmpty) return false;
+    return n1 == n2 || n1.contains(n2) || n2.contains(n1);
+  }
+
+  static String _getUnitType(String unit) {
+    if (unit == 'g' || unit == 'kg') return 'weight';
+    if (unit == 'ml' || unit == 'l') return 'volume';
+    return 'count';
+  }
+
+  static double _getBaseQty(double qty, String unit) {
+    if (unit == 'kg' || unit == 'l') return qty * 1000;
+    return qty;
+  }
+
+  static Map<String, dynamic> _formatQtyAndUnit(double baseQty, String type) {
+    if (type == 'weight') {
+      if (baseQty >= 1000) return {'qty': baseQty / 1000, 'unit': 'kg'};
+      return {'qty': baseQty, 'unit': 'g'};
+    }
+    if (type == 'volume') {
+      if (baseQty >= 1000) return {'qty': baseQty / 1000, 'unit': 'l'};
+      return {'qty': baseQty, 'unit': 'ml'};
+    }
+    return {'qty': baseQty, 'unit': 'pcs'};
+  }
+
+  // ==========================================================
+  // ГОЛОВНА ФУНКЦІЯ СКАНУВАННЯ
+  // ==========================================================
   static Future<void> startScan(BuildContext context, CollectionReference collection, String userLang) async {
-    // 1. ПЕРЕВІРКА ПІДПИСКИ FAMILY MAX
     bool hasFamilyMax = SubscriptionService().hasFamily;
 
     if (!hasFamilyMax) {
@@ -17,7 +54,6 @@ class ReceiptScanner {
       return;
     }
 
-    // 2. ЯКЩО ПІДПИСКА Є - ВІДКРИВАЄМО ВІКНО ВИБОРУ
     final picker = ImagePicker();
 
     final ImageSource? source = await showModalBottomSheet<ImageSource>(
@@ -75,12 +111,18 @@ class ReceiptScanner {
 
     if (source == null) return;
 
-    final XFile? image = await picker.pickImage(source: source, imageQuality: 80);
+    // 🔥 ГОЛОВНИЙ ФІКС ДЛЯ ЕКОНОМІЇ КОШТІВ (Жорстке стиснення)
+    final XFile? image = await picker.pickImage(
+      source: source,
+      imageQuality: 60, // Стискаємо якість
+      maxWidth: 800,    // Обмежуємо ширину
+      maxHeight: 800,   // Обмежуємо висоту
+    );
+
     if (image == null) return;
 
     if (!context.mounted) return;
 
-    // 3. АНІМОВАНИЙ ЛОАДЕР СКАНЕРА
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -88,15 +130,80 @@ class ReceiptScanner {
     );
 
     try {
-      // ТУТ БУДЕ ЗАПИТ ДО AI ДЛЯ ЧЕКІВ
-      // Поки що імітуємо завантаження
-      await Future.delayed(const Duration(seconds: 3));
+      final bytes = await File(image.path).readAsBytes();
+      final String base64Image = base64Encode(bytes);
+
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'analyzeReceiptPhoto',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 90)),
+      );
+
+      final response = await callable.call({
+        'imageBase64': base64Image,
+        'userLanguage': userLang,
+      });
+
+      String jsonString = response.data['result'] as String;
+      jsonString = jsonString.replaceAll('```json', '').replaceAll('```', '').trim();
+
+      List<dynamic> items = jsonDecode(jsonString);
+
+      if (items.isEmpty) {
+        if (!context.mounted) return;
+        Navigator.of(context, rootNavigator: true).pop();
+        SnackbarUtils.showWarning(context, AppText.get('scan_not_found'));
+        return;
+      }
+
+      final existingDocs = await collection.get();
+
+      for (var item in items) {
+        String newName = item['name'];
+        double qty = (item['quantity'] as num).toDouble();
+        String unit = item['unit'];
+        String category = item['category'];
+        int days = (item['estimatedDaysToExpire'] as num).toInt();
+        DateTime expDate = DateTime.now().add(Duration(days: days));
+
+        QueryDocumentSnapshot? matchDoc;
+
+        for (var doc in existingDocs.docs) {
+          final d = doc.data() as Map<String, dynamic>;
+          if (d['category'] != 'trash' && _isSameProduct(d['name'], newName) && _getUnitType(d['unit']) == _getUnitType(unit)) {
+            matchDoc = doc;
+            break;
+          }
+        }
+
+        if (matchDoc != null) {
+          final matchData = matchDoc.data() as Map<String, dynamic>;
+          final baseExt = _getBaseQty((matchData['quantity'] as num).toDouble(), matchData['unit']);
+          final baseNew = _getBaseQty(qty, unit);
+          final formatted = _formatQtyAndUnit(baseExt + baseNew, _getUnitType(unit));
+
+          DateTime existingDate = (matchData['expirationDate'] as Timestamp).toDate();
+          DateTime finalDate = expDate.isAfter(existingDate) ? expDate : existingDate;
+
+          await collection.doc(matchDoc.id).update({
+            'quantity': formatted['qty'],
+            'unit': formatted['unit'],
+            'expirationDate': Timestamp.fromDate(finalDate)
+          });
+        } else {
+          await collection.add({
+            'name': newName,
+            'expirationDate': Timestamp.fromDate(expDate),
+            'category': category,
+            'quantity': qty,
+            'unit': unit,
+            'addedDate': Timestamp.now()
+          });
+        }
+      }
 
       if (!context.mounted) return;
-      Navigator.of(context, rootNavigator: true).pop(); // Закриваємо лоадер
-
-      // Тимчасово показуємо повідомлення, поки не підключимо логіку ШІ
-      SnackbarUtils.showSuccess(context, AppText.get('scan_receipt_dev'));
+      Navigator.of(context, rootNavigator: true).pop();
+      SnackbarUtils.showSuccess(context, AppText.get('scan_success'));
 
     } catch (e) {
       if (context.mounted) {
@@ -141,8 +248,7 @@ class ReceiptScanner {
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    // ТУТ МАЄ БУТИ НАВІГАЦІЯ НА ЕКРАН ПІДПИСОК
-                    // Наприклад: Navigator.pushNamed(context, '/subscription_screen');
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen()));
                   },
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -171,7 +277,7 @@ class ReceiptScanner {
 
   static Widget _buildOptionBtn(BuildContext context, {required String text, required IconData icon, required Color color, required ImageSource source}) {
     return Material(
-      color: color.withValues(alpha: 0.1),
+      color: color.withOpacity(0.1),
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         onTap: () => Navigator.pop(context, source),
@@ -235,7 +341,7 @@ class _ScanningLoaderState extends State<_ScanningLoader> with SingleTickerProvi
                 fit: StackFit.expand,
                 children: [
                   Image.file(widget.imageFile, fit: BoxFit.cover),
-                  Container(color: Colors.black.withValues(alpha: 0.3)),
+                  Container(color: Colors.black.withOpacity(0.3)),
                   AnimatedBuilder(
                     animation: _controller,
                     builder: (context, child) {
@@ -249,16 +355,16 @@ class _ScanningLoaderState extends State<_ScanningLoader> with SingleTickerProvi
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
-                              colors: [Colors.blueAccent.withValues(alpha: 0.0), Colors.blueAccent.withValues(alpha: 0.8), Colors.cyanAccent],
+                              colors: [Colors.blueAccent.withOpacity(0.0), Colors.blueAccent.withOpacity(0.8), Colors.cyanAccent],
                             ),
-                            boxShadow: [BoxShadow(color: Colors.blueAccent.withValues(alpha: 0.5), blurRadius: 15, spreadRadius: 5, offset: const Offset(0, 0))],
+                            boxShadow: [BoxShadow(color: Colors.blueAccent.withOpacity(0.5), blurRadius: 15, spreadRadius: 5, offset: const Offset(0, 0))],
                           ),
                         ),
                       );
                     },
                   ),
                   Positioned.fill(
-                    child: Container(decoration: BoxDecoration(border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.5), width: 2), borderRadius: BorderRadius.circular(24))),
+                    child: Container(decoration: BoxDecoration(border: Border.all(color: Colors.blueAccent.withOpacity(0.5), width: 2), borderRadius: BorderRadius.circular(24))),
                   ),
                 ],
               ),
@@ -270,7 +376,7 @@ class _ScanningLoaderState extends State<_ScanningLoader> with SingleTickerProvi
             decoration: BoxDecoration(
                 color: Theme.of(context).cardColor,
                 borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))]
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))]
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,

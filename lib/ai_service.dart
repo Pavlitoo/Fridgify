@@ -9,7 +9,7 @@ import '../translations.dart';
 class AiRecipeService {
 
   // ===========================================================================
-  // 🍳 ГЕНЕРАЦІЯ РЕЦЕПТІВ (Текст -> Рецепти)
+  // 🍳 ГЕНЕРАЦІЯ РЕЦЕПТІВ
   // ===========================================================================
   Future<List<Recipe>> getRecipes({
     required List<String> ingredients,
@@ -110,7 +110,7 @@ class AiRecipeService {
   }
 
   // ===========================================================================
-  // 📸 АНАЛІЗ ФОТО ХОЛОДИЛЬНИКА (Gemini Vision)
+  // 📸 АНАЛІЗ ФОТО ХОЛОДИЛЬНИКА
   // ===========================================================================
   Future<List<Map<String, dynamic>>> analyzeFridgeImage({
     required File imageFile,
@@ -119,11 +119,9 @@ class AiRecipeService {
     debugPrint("📸 Відправляємо фото холодильника в Gemini Vision...");
 
     try {
-      // 1. Читаємо файл і перетворюємо в Base64
       final bytes = await imageFile.readAsBytes();
       final String base64Image = base64Encode(bytes);
 
-      // 2. Звертаємося до серверної функції analyzeFridgePhoto
       final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable(
         'analyzeFridgePhoto',
         options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),
@@ -134,7 +132,6 @@ class AiRecipeService {
         'userLanguage': userLanguage,
       });
 
-      // 3. Зчитуємо та парсимо результат
       final String resultText = response.data['result'] as String;
       String content = resultText.replaceAll('```json', '').replaceAll('```', '').trim();
 
@@ -146,13 +143,59 @@ class AiRecipeService {
         throw Exception(AppText.get('err_general'));
       }
 
-      debugPrint("✅ AI розпізнав ${jsonList.length} продуктів на фото!");
-
-      // 4. Повертаємо типізований список
       return jsonList.map((item) => Map<String, dynamic>.from(item)).toList();
 
     } on FirebaseFunctionsException catch (e) {
       debugPrint("🔴 Firebase Vision Error: ${e.code} - ${e.message}");
+      throw Exception(AppText.get('err_general'));
+    } on TimeoutException {
+      throw Exception(AppText.get('err_check_internet'));
+    } on SocketException {
+      throw Exception(AppText.get('err_no_internet'));
+    } catch (e) {
+      throw Exception(AppText.get('err_general'));
+    }
+  }
+
+  // ===========================================================================
+  // 🧾 АНАЛІЗ ЧЕКУ З МАГАЗИНУ (НОВЕ!)
+  // ===========================================================================
+  Future<List<Map<String, dynamic>>> analyzeReceiptImage({
+    required File imageFile,
+    required String userLanguage,
+  }) async {
+    debugPrint("🧾 Відправляємо фото чеку в Gemini Vision...");
+
+    try {
+      final bytes = await imageFile.readAsBytes();
+      final String base64Image = base64Encode(bytes);
+
+      final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable(
+        'analyzeReceiptPhoto',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 90)),
+      );
+
+      final response = await callable.call({
+        'imageBase64': base64Image,
+        'userLanguage': userLanguage,
+      });
+
+      final String resultText = response.data['result'] as String;
+      String content = resultText.replaceAll('```json', '').replaceAll('```', '').trim();
+
+      List<dynamic> jsonList;
+      try {
+        jsonList = jsonDecode(content);
+      } catch (e) {
+        debugPrint("❌ Помилка парсингу Receipt JSON: $e");
+        throw Exception(AppText.get('err_general'));
+      }
+
+      debugPrint("✅ AI розпізнав чек: знайшов ${jsonList.length} продуктів!");
+      return jsonList.map((item) => Map<String, dynamic>.from(item)).toList();
+
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint("🔴 Firebase Receipt Error: ${e.code} - ${e.message}");
       throw Exception(AppText.get('err_general'));
     } on TimeoutException {
       throw Exception(AppText.get('err_check_internet'));

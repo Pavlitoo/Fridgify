@@ -78,10 +78,9 @@ class _ChatScreenState extends State<ChatScreen> {
   List<Map<String, dynamic>> _pinnedMessages = [];
   int _currentPinIndex = 0;
   StreamSubscription<DocumentSnapshot>? _chatDocSub;
-  StreamSubscription<DocumentSnapshot>? _typingSub; // 🔥 Окремий слухач для друку
+  StreamSubscription<DocumentSnapshot>? _typingSub;
   double? _uploadProgress;
 
-  // 🔥 ЗМІННІ ДЛЯ ІНДИКАТОРА ДРУКУ ("ПИШЕ...")
   Timer? _typingTimer;
   bool _isTyping = false;
   List<String> _typingUserNames = [];
@@ -97,7 +96,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _audioPlayer.onDurationChanged.listen((d) { if(mounted) setState(() => _totalAudioDuration = d); });
     _audioPlayer.onPlayerComplete.listen((_) { if(mounted) setState(() { _playingMsgId = null; _currentAudioPosition = Duration.zero; }); });
 
-    // 🔥 СЛУХАЄМО ВВІД ТЕКСТУ
     _msgController.addListener(() {
       bool textEmpty = _msgController.text.trim().isEmpty;
       if (_isTextEmpty != textEmpty) {
@@ -130,7 +128,6 @@ class _ChatScreenState extends State<ChatScreen> {
       else if (_scrollController.offset <= 300 && _showScrollToBottom) setState(() => _showScrollToBottom = false);
     });
 
-    // 1. Слухаємо головний документ для закріплених повідомлень
     final docRef = widget.isDirect ? FirebaseFirestore.instance.collection('chats').doc(widget.chatId) : FirebaseFirestore.instance.collection('households').doc(widget.chatId);
     _chatDocSub = docRef.snapshots().listen((doc) {
       if (doc.exists && doc.data()!.containsKey('pinnedMessages')) {
@@ -147,7 +144,6 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     });
 
-    // 2. Слухаємо спеціальний документ TYPING_INDICATOR всередині messages
     final typingRef = widget.isDirect
         ? FirebaseFirestore.instance.collection('chats').doc(widget.chatId).collection('messages').doc('TYPING_INDICATOR')
         : FirebaseFirestore.instance.collection('households').doc(widget.chatId).collection('messages').doc('TYPING_INDICATOR');
@@ -163,7 +159,6 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  // Отримуємо імена тих, хто зараз пише
   Future<void> _updateTypingUsers(List<String> uids) async {
     if (uids.isEmpty) {
       if (mounted) setState(() => _typingUserNames = []);
@@ -194,7 +189,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _recordTimer?.cancel();
     _chatDocSub?.cancel();
-    _typingSub?.cancel(); // Звільняємо слухача
+    _typingSub?.cancel();
     if (_isRecorderInitialized && _recorder != null) _recorder!.closeRecorder();
     _audioPlayer.dispose();
     _msgController.dispose();
@@ -231,14 +226,37 @@ class _ChatScreenState extends State<ChatScreen> {
       else if (data['fileUrl'] != null) pinText = '📎 ${data['fileName'] ?? AppText.get('chat_attachment_file')}';
       else if (data['audioUrl'] != null || data['audioBase64'] != null) pinText = '🎤 ${AppText.get('chat_voice_msg')}';
     }
-    final newPin = {'id': msgId, 'text': pinText, 'senderName': data['senderName'] ?? 'User'};
+    // 🔥 ДОДАНО АВТОРА ЗАКРІПЛЕННЯ
+    final newPin = {'id': msgId, 'text': pinText, 'senderName': data['senderName'] ?? 'User', 'pinnedBy': user.uid};
     await docRef.set({'pinnedMessages': FieldValue.arrayUnion([newPin])}, SetOptions(merge: true));
     if(mounted) SnackbarUtils.showSuccess(context, "📌 ${AppText.get('msg_pinned')}");
   }
 
+  // 🔥 ДОДАНО ПЕРЕВІРКУ ПРАВ НА ВІДКРІПЛЕННЯ
   Future<void> _unpinMessage(Map<String, dynamic> pinToRemove) async {
-    final docRef = widget.isDirect ? FirebaseFirestore.instance.collection('chats').doc(widget.chatId) : FirebaseFirestore.instance.collection('households').doc(widget.chatId);
-    await docRef.update({'pinnedMessages': FieldValue.arrayRemove([pinToRemove])});
+    bool canUnpin = true;
+
+    if (!widget.isDirect) {
+      final houseDoc = await FirebaseFirestore.instance.collection('households').doc(widget.chatId).get();
+      final adminId = houseDoc.data()?['adminId'];
+
+      // Якщо я не адмін і не я закріпив - відкріпити не можна
+      if (adminId != user.uid && pinToRemove['pinnedBy'] != user.uid) {
+        canUnpin = false;
+      }
+    } else {
+      // В особистому чаті відкріплює тільки той, хто закріпив (або обидва, якщо це старі повідомлення)
+      if (pinToRemove['pinnedBy'] != null && pinToRemove['pinnedBy'] != user.uid) {
+        canUnpin = false;
+      }
+    }
+
+    if (canUnpin) {
+      final docRef = widget.isDirect ? FirebaseFirestore.instance.collection('chats').doc(widget.chatId) : FirebaseFirestore.instance.collection('households').doc(widget.chatId);
+      await docRef.update({'pinnedMessages': FieldValue.arrayRemove([pinToRemove])});
+    } else {
+      SnackbarUtils.showWarning(context, AppText.get('err_access_denied'));
+    }
   }
 
   Future<void> _handlePinTap() async {
@@ -437,7 +455,6 @@ class _ChatScreenState extends State<ChatScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(widget.chatTitle ?? AppText.get('chat_title'), style: TextStyle(fontSize: 18, color: textColor)),
-              // 🔥 ІНДИКАТОР "ПИШЕ..."
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
                 child: _typingUserNames.isNotEmpty
@@ -465,8 +482,20 @@ class _ChatScreenState extends State<ChatScreen> {
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-                    // 🔥 ВАЖЛИВО: Відфільтровуємо системний документ TYPING_INDICATOR зі списку!
                     var docs = snapshot.data!.docs.where((doc) => doc.id != 'TYPING_INDICATOR').toList();
+
+                    // 🔥 МИТТЄВЕ ПОЗНАЧЕННЯ ПОВІДОМЛЕНЬ ЯК ПРОЧИТАНИХ
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!mounted) return;
+                      bool hasUnread = docs.any((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final readBy = List.from(data['readBy'] ?? []);
+                        return data['senderId'] != user.uid && !readBy.contains(user.uid);
+                      });
+                      if (hasUnread) {
+                        _chatService.markAsRead(widget.chatId, isDirect: widget.isDirect);
+                      }
+                    });
 
                     if (_showMediaOnly) docs = docs.where((doc) { final data = doc.data() as Map<String, dynamic>; return data['imageUrl'] != null || data['imageBase64'] != null || data['audioUrl'] != null || data['audioBase64'] != null || data['fileUrl'] != null; }).toList();
                     if (_isSearching && _searchQuery.isNotEmpty) docs = docs.where((doc) { final data = doc.data() as Map<String, dynamic>; final text = data['text']?.toString().toLowerCase() ?? ''; return text.contains(_searchQuery.toLowerCase()); }).toList();
@@ -607,7 +636,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // 🔥 ПУШІ
   Future<void> _notifyRecipients(String messageText, {String? replyToName}) async { try { final myDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get(); final myName = myDoc.data()?['displayName'] ?? AppText.get('notif_someone'); String notificationType = widget.isDirect ? 'private_chat' : 'family_chat'; String targetChatId = widget.chatId; String title = widget.isDirect ? myName : "${AppText.get('notif_family')}: $myName"; String body = messageText; if (replyToName != null) { body = "↪️ ${AppText.get('notif_reply_to')} $replyToName: $messageText"; } if (widget.isDirect) { String receiverId = ''; if (widget.chatId.contains('_')) { final parts = widget.chatId.split('_'); if (parts.length == 2) { if (parts[0] == user.uid) receiverId = parts[1]; else if (parts[1] == user.uid) receiverId = parts[0]; } } if (receiverId.isEmpty) { final chatDoc = await FirebaseFirestore.instance.collection('chats').doc(widget.chatId).get(); if (chatDoc.exists) { final participants = List<String>.from(chatDoc.data()?['participants'] ?? []); receiverId = participants.firstWhere((id) => id != user.uid, orElse: () => ''); } } if (receiverId.isNotEmpty) { final receiverDoc = await FirebaseFirestore.instance.collection('users').doc(receiverId).get(); final token = receiverDoc.data()?['fcmToken']; if (token != null) await _sendPushV1(token, title, body, notificationType, targetChatId); } } else { String? householdId = myDoc.data()?['householdId']; if (householdId != null) { final familyMembers = await FirebaseFirestore.instance.collection('users').where('householdId', isEqualTo: householdId).get(); for (var doc in familyMembers.docs) { if (doc.id == user.uid) continue; final token = doc.data()['fcmToken']; if (token != null) _sendPushV1(token, title, body, notificationType, targetChatId); } } } } catch (e) { debugPrint("❌ [PUSH] Error: $e"); } }
   Future<void> _sendPushV1(String token, String title, String body, String type, String chatId) async { try { final accountCredentials = auth.ServiceAccountCredentials.fromJson(googleServiceAccount); final scopes = ['https://www.googleapis.com/auth/firebase.messaging']; final client = await auth.clientViaServiceAccount(accountCredentials, scopes); await client.post(Uri.parse('https://fcm.googleapis.com/v1/projects/${googleServiceAccount['project_id']}/messages:send'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({ 'message': { 'token': token, 'notification': { 'title': title, 'body': body }, 'data': { 'type': type, 'chatId': chatId, 'click_action': 'FLUTTER_NOTIFICATION_CLICK' } } })); client.close(); } catch (e) { debugPrint("❌ [PUSH V1] Exception: $e"); } }
 }

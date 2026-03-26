@@ -24,24 +24,34 @@ class ChatService {
     return ref.orderBy('timestamp', descending: true).snapshots();
   }
 
-  // --- ЛІЧИЛЬНИК НЕПРОЧИТАНИХ ---
-  Stream<int> getUnreadCountStream(String householdId) {
+  // --- ОТРИМАННЯ МЕТАДАНИХ ЧАТУ ---
+  Stream<DocumentSnapshot> getChatMetadataStream(String chatId, {bool isDirect = false}) {
+    final ref = isDirect
+        ? _firestore.collection('chats').doc(chatId)
+        : _firestore.collection('households').doc(chatId);
+    return ref.snapshots();
+  }
+
+  // --- УНІВЕРСАЛЬНИЙ ЛІЧИЛЬНИК НЕПРОЧИТАНИХ ---
+  Stream<int> getUnreadCountForChatStream(String chatId, {bool isDirect = false}) {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return Stream.value(0);
 
-    return _firestore
-        .collection('households')
-        .doc(householdId)
-        .collection('messages')
+    final ref = isDirect
+        ? _firestore.collection('chats').doc(chatId).collection('messages')
+        : _firestore.collection('households').doc(chatId).collection('messages');
+
+    return ref
         .orderBy('timestamp', descending: true)
         .limit(50)
         .snapshots()
         .map((snapshot) {
       int count = 0;
       for (var doc in snapshot.docs) {
+        if (doc.id == 'TYPING_INDICATOR') continue;
         final data = doc.data() as Map<String, dynamic>;
         final readBy = List.from(data['readBy'] ?? []);
-        if (!readBy.contains(uid)) {
+        if (data['senderId'] != uid && !readBy.contains(uid)) {
           count++;
         }
       }
@@ -49,7 +59,11 @@ class ChatService {
     });
   }
 
-  // --- ПОЗНАЧИТИ ЯК ПРОЧИТАНЕ ---
+  Stream<int> getUnreadCountStream(String householdId) {
+    return getUnreadCountForChatStream(householdId, isDirect: false);
+  }
+
+  // 🔥 ЗБІЛЬШЕНО ЛІМІТ ДО 50 ДЛЯ НАДІЙНОСТІ
   Future<void> markAsRead(String chatId, {bool isDirect = false}) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
@@ -58,11 +72,12 @@ class ChatService {
         ? _firestore.collection('chats').doc(chatId).collection('messages')
         : _firestore.collection('households').doc(chatId).collection('messages');
 
-    final snapshot = await ref.limit(20).get();
+    final snapshot = await ref.orderBy('timestamp', descending: true).limit(50).get();
     final batch = _firestore.batch();
     bool needCommit = false;
 
     for (var doc in snapshot.docs) {
+      if (doc.id == 'TYPING_INDICATOR') continue;
       final readBy = List.from(doc['readBy'] ?? []);
       if (!readBy.contains(uid)) {
         batch.update(doc.reference, {
@@ -75,12 +90,11 @@ class ChatService {
     if (needCommit) await batch.commit();
   }
 
-  // 🔥 НОВЕ: СТАТУС "ПИШЕ ПОВІДОМЛЕННЯ..." (ОБХІД ПРАВИЛ FIREBASE)
+  // --- СТАТУС "ПИШЕ ПОВІДОМЛЕННЯ..." ---
   Future<void> setTypingStatus(String chatId, bool isTyping, {bool isDirect = false}) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
 
-    // Пишемо у спеціальний документ в підколекції messages (там точно є права на запис для всіх учасників)
     final docRef = isDirect
         ? _firestore.collection('chats').doc(chatId).collection('messages').doc('TYPING_INDICATOR')
         : _firestore.collection('households').doc(chatId).collection('messages').doc('TYPING_INDICATOR');
@@ -91,9 +105,7 @@ class ChatService {
       } else {
         await docRef.set({'typing': FieldValue.arrayRemove([uid])}, SetOptions(merge: true));
       }
-    } catch (e) {
-      print("Помилка оновлення статусу друку: $e");
-    }
+    } catch (e) {}
   }
 
   // --- АВАТАРКА ЮЗЕРА ---
@@ -108,7 +120,7 @@ class ChatService {
     }
   }
 
-  // 🔥 УНІВЕРСАЛЬНИЙ ЗАВАНТАЖУВАЧ У STORAGE
+  // --- ЗАВАНТАЖУВАЧ У STORAGE ---
   Future<String?> _uploadFileToStorage(File file, String folderName) async {
     try {
       final uid = _auth.currentUser!.uid;
@@ -124,6 +136,22 @@ class ChatService {
       print("Помилка завантаження файлу у Storage: $e");
       return null;
     }
+  }
+
+  Future<void> _updateLastMessageTime(String chatId, {bool isDirect = false}) async {
+    final ref = isDirect
+        ? _firestore.collection('chats').doc(chatId)
+        : _firestore.collection('households').doc(chatId);
+
+    Map<String, dynamic> updateData = {
+      'lastTimestamp': FieldValue.serverTimestamp(),
+    };
+
+    if (isDirect) {
+      updateData['participants'] = chatId.split('_');
+    }
+
+    await ref.set(updateData, SetOptions(merge: true));
   }
 
   // --- ВІДПРАВКА ТЕКСТУ ---
@@ -146,6 +174,8 @@ class ChatService {
       'replyToText': replyToText,
       'replyToSender': replyToSender,
     });
+
+    await _updateLastMessageTime(chatId, isDirect: isDirect);
   }
 
   // --- ЛАЙК ПОВІДОМЛЕННЯ ---
@@ -173,7 +203,7 @@ class ChatService {
     await ref.update({'text': newText, 'isEdited': true});
   }
 
-  // 🔥 РОЗУМНЕ ВИДАЛЕННЯ (З очищенням файлів зі Storage)
+  // --- ВИДАЛЕННЯ ---
   Future<void> deleteMessage(String chatId, String msgId, {bool isDirect = false}) async {
     final docRef = isDirect
         ? _firestore.collection('chats').doc(chatId).collection('messages').doc(msgId)
@@ -192,12 +222,10 @@ class ChatService {
         if (fileUrl != null) await _storage.refFromURL(fileUrl).delete();
       }
       await docRef.delete();
-    } catch (e) {
-      print("Помилка при видаленні повідомлення: $e");
-    }
+    } catch (e) {}
   }
 
-  // 🔥 ВІДПРАВКА ФОТО ЧЕРЕЗ STORAGE
+  // --- ВІДПРАВКА ФОТО ---
   Future<void> sendImage(String chatId, File imageFile, {bool isDirect = false}) async {
     try {
       final user = _auth.currentUser!;
@@ -219,12 +247,12 @@ class ChatService {
         'readBy': [user.uid],
         'likes': [],
       });
-    } catch (e) {
-      print("Error sending image: $e");
-    }
+
+      await _updateLastMessageTime(chatId, isDirect: isDirect);
+    } catch (e) {}
   }
 
-  // 🔥 ВІДПРАВКА ГОЛОСОВОГО ЧЕРЕЗ STORAGE
+  // --- ВІДПРАВКА ГОЛОСОВОГО ---
   Future<void> sendVoice(String chatId, String path, {bool isDirect = false}) async {
     try {
       final user = _auth.currentUser!;
@@ -247,12 +275,12 @@ class ChatService {
         'readBy': [user.uid],
         'likes': [],
       });
-    } catch (e) {
-      print("Error sending voice: $e");
-    }
+
+      await _updateLastMessageTime(chatId, isDirect: isDirect);
+    } catch (e) {}
   }
 
-  // 🔥 ВІДПРАВКА БУДЬ-ЯКОГО ФАЙЛУ ЧЕРЕЗ STORAGE
+  // --- ВІДПРАВКА ФАЙЛУ ---
   Future<void> sendFile(String chatId, File file, String fileName, {bool isDirect = false}) async {
     try {
       final user = _auth.currentUser!;
@@ -275,8 +303,8 @@ class ChatService {
         'readBy': [user.uid],
         'likes': [],
       });
-    } catch (e) {
-      print("Error sending file: $e");
-    }
+
+      await _updateLastMessageTime(chatId, isDirect: isDirect);
+    } catch (e) {}
   }
 }
